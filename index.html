@@ -54,7 +54,6 @@ body{background:#1e3d6e;font-family:'Hiragino Kaku Gothic Pro',sans-serif;
   padding:0 5px;max-width:100px;pointer-events:none}
 .skip-lbl{display:flex;align-items:center;gap:7px;font-size:13px;
   color:rgba(255,255,255,.8);cursor:pointer}
-.mv-warn{font-size:11px;color:#FF9800;display:none}
 #start-btn{background:#4CAF50;color:#fff;border:none;padding:16px 54px;
   font-size:22px;font-weight:bold;border-radius:14px;cursor:pointer;
   letter-spacing:.08em;box-shadow:0 4px 16px rgba(76,175,80,.4);margin-top:4px;
@@ -89,12 +88,14 @@ body{background:#1e3d6e;font-family:'Hiragino Kaku Gothic Pro',sans-serif;
   box-shadow:0 4px 12px rgba(0,0,0,.3);flex-shrink:0;transition:opacity .2s}
 .card img{width:88%;height:88%;object-fit:contain;pointer-events:none}
 .card.ghost{opacity:.2}
+
+/* ====== OVERLAYS ====== */
 #mv{display:none;position:fixed;inset:0;background:#000;z-index:100;
   align-items:center;justify-content:center;flex-direction:column}
 #mv video{max-width:100%;max-height:100svh}
 #skip-mv{position:absolute;bottom:28px;right:28px;background:rgba(255,255,255,.2);
   color:#fff;border:2px solid rgba(255,255,255,.5);padding:12px 24px;
-  font-size:18px;border-radius:10px;cursor:pointer}
+  font-size:18px;border-radius:10px;cursor:pointer;-webkit-tap-highlight-color:transparent}
 #fb{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
   pointer-events:none;z-index:200;opacity:0;transition:opacity .2s;
   font-size:clamp(50px,9vw,90px);font-weight:bold;text-shadow:0 4px 20px rgba(0,0,0,.6)}
@@ -111,6 +112,15 @@ body{background:#1e3d6e;font-family:'Hiragino Kaku Gothic Pro',sans-serif;
 .particle{position:absolute;width:14px;height:14px;border-radius:50%;
   animation:pop 1s ease-out forwards}
 @keyframes pop{0%{transform:scale(0);opacity:1}100%{transform:scale(3);opacity:0}}
+#reward-tap{display:none;position:fixed;inset:0;z-index:350;
+  background:rgba(0,0,0,.88);align-items:center;justify-content:center;
+  flex-direction:column;gap:24px}
+#reward-tap .rt-emoji{font-size:68px}
+#reward-tap .rt-title{font-size:26px;color:#FFD700;font-weight:bold;letter-spacing:.06em}
+#watch-mv-btn{background:#e74c3c;color:#fff;border:none;padding:18px 48px;
+  font-size:22px;font-weight:bold;border-radius:14px;cursor:pointer;
+  box-shadow:0 4px 18px rgba(231,76,60,.5);-webkit-tap-highlight-color:transparent}
+#watch-mv-btn:active{transform:scale(.96)}
 #end{display:none;position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.75);
   align-items:center;justify-content:center}
 .end-box{background:#1e3d6e;border:3px solid #FFD700;border-radius:24px;
@@ -173,7 +183,6 @@ body{background:#1e3d6e;font-family:'Hiragino Kaku Gothic Pro',sans-serif;
       <span class="icon">🎬</span>
       <span class="lbl" id="mv-lbl">ご褒美ムービー（タップ）</span>
     </label>
-    <div class="mv-warn" id="mv-warn">⚠️ 動画が大きいです（20MB以下推奨）</div>
     <label class="skip-lbl">
       <input type="checkbox" id="skip-video"> ムービーなし（花火アニメ）
     </label>
@@ -190,9 +199,27 @@ body{background:#1e3d6e;font-family:'Hiragino Kaku Gothic Pro',sans-serif;
   </div></div>
   <div class="btm" id="choices"></div>
 </div>
-<div id="mv"><video id="vid" playsinline webkit-playsinline></video><button id="skip-mv">スキップ →</button></div>
+
+<!-- ムービーオーバーレイ -->
+<div id="mv">
+  <video id="vid" playsinline webkit-playsinline></video>
+  <button id="skip-mv">スキップ →</button>
+</div>
+
+<!-- フィードバック -->
 <div id="fb"></div>
+
+<!-- 花火 -->
 <div id="fw"></div>
+
+<!-- ムービー再生ゲート（iOSユーザー操作を確保） -->
+<div id="reward-tap">
+  <div class="rt-emoji">🎉</div>
+  <div class="rt-title">やったー！クリア！</div>
+  <button id="watch-mv-btn">🎬 ムービーを見る！</button>
+</div>
+
+<!-- クリア画面 -->
 <div id="end">
   <div class="end-box">
     <div class="end-emoji">🎊</div>
@@ -204,11 +231,12 @@ body{background:#1e3d6e;font-family:'Hiragino Kaku Gothic Pro',sans-serif;
 
 <script>
 'use strict';
-var S={imgs:['','','','','',''],movieSrc:'',skipVideo:false};
+var S={imgs:['','','','','',''],movieFile:null,skipVideo:false};
 var filled=0;
-var IMGS=[],MOVIE='',HAS_MOVIE=false;
+var IMGS=[],MOVIE_FILE=null,HAS_MOVIE=false;
 var level=1,judging=false;
 var drag={el:null,cl:null,ox:0,oy:0};
+var movieObjectURL=null;
 
 function compress(dataURL,cb){
   var img=new Image();
@@ -231,7 +259,7 @@ for(var ii=0;ii<6;ii++){
         compress(e.target.result,function(c){
           var empty=S.imgs[i]==='';S.imgs[i]=c;
           var slot=document.getElementById('slot-'+i);
-          var p=slot.querySelector('.prev');p.src=c;p.style.display='block';
+          var p=slot.querySelector('.prev');p.src=c;
           slot.classList.add('filled');
           if(empty){filled++;document.getElementById('cnt').textContent=filled;}
           checkReady();
@@ -244,16 +272,11 @@ for(var ii=0;ii<6;ii++){
 
 document.getElementById('fi-movie').addEventListener('change',function(){
   var file=this.files&&this.files[0];if(!file)return;
-  document.getElementById('mv-warn').style.display=file.size>20*1024*1024?'block':'none';
-  var lbl=document.getElementById('mv-lbl');lbl.textContent='読み込み中…';
-  var r=new FileReader();
-  r.onload=function(e){
-    S.movieSrc=e.target.result;
-    document.getElementById('mv-slot').classList.add('filled');
-    lbl.textContent=file.name.length>16?file.name.slice(0,14)+'…':file.name;
-    checkReady();
-  };
-  r.readAsDataURL(file);
+  S.movieFile=file;
+  var lbl=document.getElementById('mv-lbl');
+  lbl.textContent=file.name.length>16?file.name.slice(0,14)+'…':file.name;
+  document.getElementById('mv-slot').classList.add('filled');
+  checkReady();
 });
 
 document.getElementById('skip-video').addEventListener('change',function(){
@@ -261,14 +284,14 @@ document.getElementById('skip-video').addEventListener('change',function(){
 });
 
 function checkReady(){
-  var ok=S.imgs.every(function(u){return u!=='';})&&(S.skipVideo||S.movieSrc!=='');
+  var ok=S.imgs.every(function(u){return u!=='';})&&(S.skipVideo||S.movieFile!==null);
   document.getElementById('start-btn').disabled=!ok;
 }
 
 document.getElementById('start-btn').addEventListener('click',function(){
   IMGS=S.imgs.slice();
-  MOVIE=S.skipVideo?'':S.movieSrc;
-  HAS_MOVIE=MOVIE!==''&&MOVIE.length<40*1024*1024;
+  HAS_MOVIE=!S.skipVideo&&S.movieFile!==null;
+  MOVIE_FILE=HAS_MOVIE?S.movieFile:null;
   level=1;judging=false;
   document.getElementById('setup').style.display='none';
   document.getElementById('game').style.display='flex';
@@ -285,7 +308,20 @@ document.getElementById('back-btn').addEventListener('click',function(){
   document.getElementById('game').style.display='none';
   document.getElementById('setup').style.display='flex';
 });
+
 document.getElementById('skip-mv').addEventListener('click',endReward);
+
+document.getElementById('watch-mv-btn').addEventListener('click',function(){
+  document.getElementById('reward-tap').style.display='none';
+  if(movieObjectURL){URL.revokeObjectURL(movieObjectURL);movieObjectURL=null;}
+  movieObjectURL=URL.createObjectURL(MOVIE_FILE);
+  var v=document.getElementById('vid');
+  v.src=movieObjectURL;
+  document.getElementById('mv').style.display='flex';
+  var p=v.play();
+  if(p&&p.catch)p.catch(function(){});
+  v.onended=endReward;
+});
 
 function buildDots(){
   var c=document.getElementById('dots');c.innerHTML='';
@@ -366,13 +402,17 @@ function feedback(txt,cls,ms,cb){
 }
 function showReward(){
   if(HAS_MOVIE){
-    document.getElementById('mv').style.display='flex';
-    var v=document.getElementById('vid');v.src=MOVIE;v.play();v.onended=endReward;
-  }else{startFireworks();}
+    document.getElementById('reward-tap').style.display='flex';
+  }else{
+    startFireworks();
+  }
 }
 function endReward(){
-  var v=document.getElementById('vid');v.pause();v.removeAttribute('src');v.load();
+  var v=document.getElementById('vid');
+  v.pause();v.removeAttribute('src');v.load();
+  if(movieObjectURL){URL.revokeObjectURL(movieObjectURL);movieObjectURL=null;}
   document.getElementById('mv').style.display='none';
+  document.getElementById('reward-tap').style.display='none';
   document.getElementById('end').style.display='flex';
 }
 function startFireworks(){
