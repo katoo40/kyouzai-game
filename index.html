@@ -222,7 +222,7 @@ var S={imgs:['','','','','',''],movieFile:null,skipVideo:false};
 var filled=0;
 var IMGS=[],MOVIE_FILE=null,HAS_MOVIE=false;
 var level=1,judging=false;
-var drag={el:null,cl:null,ox:0,oy:0};
+var drag={el:null,cl:null,ox:0,oy:0,w:0,h:0,judged:false};
 var movieObjectURL=null;
 
 /* ===== IndexedDB（動画保存用） ===== */
@@ -432,7 +432,7 @@ function bindDrag(card){
 }
 function startDrag(card,cx,cy){
   var r=card.getBoundingClientRect();
-  drag.el=card;drag.ox=cx-r.left;drag.oy=cy-r.top;
+  drag.el=card;drag.ox=cx-r.left;drag.oy=cy-r.top;drag.w=r.width;drag.h=r.height;drag.judged=false;
   var cl=document.createElement('div');cl.className='dclone';
   cl.style.cssText='width:'+r.width+'px;height:'+r.height+'px;left:'+r.left+'px;top:'+r.top+'px';
   var img=document.createElement('img');img.src=card.querySelector('img').src;
@@ -442,19 +442,30 @@ function startDrag(card,cx,cy){
 function moveDrag(cx,cy){
   if(!drag.cl)return;
   drag.cl.style.left=(cx-drag.ox)+'px';drag.cl.style.top=(cy-drag.oy)+'px';
-  document.getElementById('dz').classList.toggle('over',isOver(cx,cy));
+  var over=isCenterOver(cx,cy);
+  document.getElementById('dz').classList.toggle('over',over);
+  if(over&&!drag.judged&&!judging){
+    drag.judged=true;
+    var idx=parseInt(drag.el.dataset.i);
+    if(drag.cl){drag.cl.remove();drag.cl=null;}
+    drag.el.classList.remove('ghost');
+    document.getElementById('dz').classList.remove('over');
+    drag.el=null;
+    judge(idx);
+  }
 }
 function endDrag(cx,cy){
   if(!drag.el)return;
   if(drag.cl){drag.cl.remove();drag.cl=null;}
   drag.el.classList.remove('ghost');
   document.getElementById('dz').classList.remove('over');
-  if(isOver(cx,cy))judge(parseInt(drag.el.dataset.i));
   drag.el=null;
 }
-function isOver(cx,cy){
+function isCenterOver(cx,cy){
   var r=document.getElementById('dz').getBoundingClientRect();
-  return cx>=r.left&&cx<=r.right&&cy>=r.top&&cy<=r.bottom;
+  var cardCx=cx-drag.ox+drag.w/2;
+  var cardCy=cy-drag.oy+drag.h/2;
+  return cardCx>=r.left&&cardCx<=r.right&&cardCy>=r.top&&cardCy<=r.bottom;
 }
 function onTS(e){e.preventDefault();var t=e.touches[0];startDrag(e.currentTarget,t.clientX,t.clientY);}
 function onTM(e){e.preventDefault();var t=e.touches[0];moveDrag(t.clientX,t.clientY);}
