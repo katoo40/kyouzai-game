@@ -28,6 +28,13 @@ body{background:#1e3d6e;font-family:'Hiragino Kaku Gothic Pro',sans-serif;
 .slot-thumb{width:52px;height:52px;border-radius:8px;background:rgba(255,255,255,.08);
   overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:20px}
 .slot-thumb img{width:100%;height:100%;object-fit:cover}
+.count-sel{display:flex;align-items:center;gap:10px;width:100%;max-width:510px}
+.count-label{font-size:14px;color:rgba(255,255,255,.8);white-space:nowrap}
+.count-btns{display:flex;gap:6px}
+.cnt-btn{width:42px;height:42px;border-radius:10px;border:2px solid rgba(255,255,255,.25);
+  background:rgba(255,255,255,.08);color:rgba(255,255,255,.7);font-size:17px;font-weight:bold;
+  cursor:pointer;-webkit-tap-highlight-color:transparent;transition:.2s}
+.cnt-btn.active{border-color:#FFD700;background:rgba(255,215,0,.2);color:#FFD700}
 .counter{font-size:15px;font-weight:bold;background:rgba(255,255,255,.1);
   border-radius:8px;padding:6px 18px;letter-spacing:.04em}
 .counter span{color:#FFD700}
@@ -144,7 +151,7 @@ body{background:#1e3d6e;font-family:'Hiragino Kaku Gothic Pro',sans-serif;
 <div id="setup">
   <h1>🎮 画像マッチングゲーム</h1>
   <div class="hint-box">
-    <b>① 設定を選ぶ</b>　<b>② 画像6枚・ムービー選択</b>　<b>③ ゲームスタート！</b>
+    <b>① 設定を選ぶ</b>　<b>② 画像・ムービー選択</b>　<b>③ ゲームスタート！</b>
   </div>
 
   <!-- スロットタブ -->
@@ -163,7 +170,19 @@ body{background:#1e3d6e;font-family:'Hiragino Kaku Gothic Pro',sans-serif;
     </button>
   </div>
 
-  <div class="counter">選択済み：<span id="cnt">0</span> / 6枚</div>
+  <!-- 選択肢の数 -->
+  <div class="count-sel">
+    <span class="count-label">選択肢の数：</span>
+    <div class="count-btns">
+      <button class="cnt-btn" data-n="2">2</button>
+      <button class="cnt-btn" data-n="3">3</button>
+      <button class="cnt-btn active" data-n="4">4</button>
+      <button class="cnt-btn" data-n="5">5</button>
+      <button class="cnt-btn" data-n="6">6</button>
+    </div>
+  </div>
+
+  <div class="counter">選択済み：<span id="cnt">0</span> / <span id="max-cnt">4</span>枚</div>
   <div class="grid">
     <label class="slot target-s" id="slot-0" for="fi-0">
       <input type="file" id="fi-0" accept="image/*">
@@ -239,10 +258,10 @@ body{background:#1e3d6e;font-family:'Hiragino Kaku Gothic Pro',sans-serif;
 'use strict';
 var NUM_SLOTS=3;
 var currentSlot=parseInt(localStorage.getItem('mg_current_slot')||'0');
-var S={imgs:['','','','','',''],movieFile:null,skipVideo:false};
+var S={imgs:['','','','','',''],movieFile:null,skipVideo:false,count:4};
 var filled=0;
 var IMGS=[],MOVIE_FILE=null,HAS_MOVIE=false;
-var level=1,judging=false;
+var level=1,judging=false,MAX_LEVEL=4;
 var drag={el:null,cl:null,ox:0,oy:0,w:0,h:0,judged:false};
 var movieObjectURL=null;
 
@@ -318,6 +337,29 @@ function saveSkip(v){
 function saveVideoName(name){
   try{localStorage.setItem('mg_vidname_'+currentSlot,name);}catch(e){}
 }
+function saveCount(v){
+  try{localStorage.setItem('mg_count_'+currentSlot,v);}catch(e){}
+}
+
+/* ===== 選択肢数UI ===== */
+function updateCountUI(n){
+  document.querySelectorAll('.cnt-btn').forEach(function(b){
+    b.classList.toggle('active',parseInt(b.dataset.n)===n);
+  });
+  document.getElementById('max-cnt').textContent=n;
+}
+function updateGridVisibility(n){
+  for(var i=0;i<6;i++){
+    document.getElementById('slot-'+i).style.display=i<n?'':'none';
+  }
+}
+function recalcFilled(){
+  filled=0;
+  for(var i=0;i<S.count;i++){
+    if(S.imgs[i]!=='')filled++;
+  }
+  document.getElementById('cnt').textContent=filled;
+}
 
 /* ===== スロットタブ更新 ===== */
 function updateSlotTabs(){
@@ -339,13 +381,12 @@ function switchSlot(n){
   if(n===currentSlot)return;
   currentSlot=n;
   localStorage.setItem('mg_current_slot',n);
-  S={imgs:['','','','','',''],movieFile:null,skipVideo:false};
+  S={imgs:['','','','','',''],movieFile:null,skipVideo:false,count:4};
   filled=0;
   for(var i=0;i<6;i++){
     var sl=document.getElementById('slot-'+i);
     sl.classList.remove('filled');
     sl.querySelector('.prev').src='';
-    sl.querySelector('.prev').style.display='';
   }
   document.getElementById('mv-slot').classList.remove('filled');
   document.getElementById('mv-lbl').textContent='ご褒美ムービー（タップ）';
@@ -356,19 +397,20 @@ function switchSlot(n){
 
 /* ===== スロット読み込み ===== */
 function loadSlot(n,cb){
-  var restoredAny=false;
+  var cnt=parseInt(localStorage.getItem('mg_count_'+n)||'4');
+  S.count=cnt;
+  updateCountUI(cnt);
+  updateGridVisibility(cnt);
   for(var i=0;i<6;i++){
     var d=localStorage.getItem('mg_img_'+i+'_'+n);
     if(d){
       S.imgs[i]=d;
       var sl=document.getElementById('slot-'+i);
-      var p=sl.querySelector('.prev');p.src=d;
+      sl.querySelector('.prev').src=d;
       sl.classList.add('filled');
-      filled++;
-      restoredAny=true;
     }
   }
-  document.getElementById('cnt').textContent=filled;
+  recalcFilled();
   var skip=localStorage.getItem('mg_skip_'+n)==='1';
   S.skipVideo=skip;
   document.getElementById('skip-video').checked=skip;
@@ -396,6 +438,17 @@ function init(){
       switchSlot(parseInt(this.dataset.slot));
     });
   });
+  document.querySelectorAll('.cnt-btn').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var n=parseInt(this.dataset.n);
+      S.count=n;
+      saveCount(n);
+      updateCountUI(n);
+      updateGridVisibility(n);
+      recalcFilled();
+      checkReady();
+    });
+  });
 }
 
 /* ===== 画像圧縮 ===== */
@@ -419,12 +472,12 @@ for(var ii=0;ii<6;ii++){
       var r=new FileReader();
       r.onload=function(e){
         compress(e.target.result,function(c){
-          var empty=S.imgs[i]==='';S.imgs[i]=c;
+          S.imgs[i]=c;
           var sl=document.getElementById('slot-'+i);
           sl.querySelector('.prev').src=c;
           sl.classList.add('filled');
-          if(empty){filled++;document.getElementById('cnt').textContent=filled;}
           saveImage(i,c);
+          recalcFilled();
           if(i===0)updateSlotTabs();
           checkReady();
         });
@@ -454,13 +507,15 @@ document.getElementById('skip-video').addEventListener('change',function(){
 });
 
 function checkReady(){
-  var ok=S.imgs.every(function(u){return u!=='';})&&(S.skipVideo||S.movieFile!==null);
+  var imgsOk=S.imgs.slice(0,S.count).every(function(u){return u!=='';});
+  var ok=imgsOk&&(S.skipVideo||S.movieFile!==null);
   document.getElementById('start-btn').disabled=!ok;
 }
 
 /* ===== ゲーム開始 ===== */
 document.getElementById('start-btn').addEventListener('click',function(){
-  IMGS=S.imgs.slice();
+  IMGS=S.imgs.slice(0,S.count);
+  MAX_LEVEL=S.count;
   HAS_MOVIE=!S.skipVideo&&S.movieFile!==null;
   MOVIE_FILE=HAS_MOVIE?S.movieFile:null;
   level=1;judging=false;
@@ -524,7 +579,7 @@ function soundWrong(){
 /* ===== ゲームロジック ===== */
 function buildDots(){
   var c=document.getElementById('dots');c.innerHTML='';
-  for(var i=1;i<=6;i++){var d=document.createElement('div');d.className='dot';d.dataset.lv=i;c.appendChild(d);}
+  for(var i=1;i<=MAX_LEVEL;i++){var d=document.createElement('div');d.className='dot';d.dataset.lv=i;c.appendChild(d);}
 }
 function updateDots(lv){
   document.querySelectorAll('.dot').forEach(function(d){
@@ -613,7 +668,7 @@ function onMD(e){
 function judge(){
   if(judging)return;
   judging=true;
-  feedback('せいかい!','ok',1200,function(){judging=false;if(level>=6)showReward();else renderLevel(level+1);});
+  feedback('せいかい!','ok',1200,function(){judging=false;if(level>=MAX_LEVEL)showReward();else renderLevel(level+1);});
 }
 function feedback(txt,cls,ms,cb){
   var el=document.getElementById('fb');el.textContent=txt;el.className='show '+cls;
