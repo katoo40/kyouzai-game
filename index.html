@@ -12,8 +12,6 @@
 body{background:#1e3d6e;font-family:'Hiragino Kaku Gothic Pro',sans-serif;
   color:#fff;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;
   padding-top:env(safe-area-inset-top)}
-
-/* ====== SETUP SCREEN ====== */
 #setup{display:flex;flex-direction:column;align-items:center;
   min-height:100svh;padding:28px 18px 40px;gap:14px;overflow-y:auto}
 #setup h1{font-size:21px;letter-spacing:.08em;text-align:center;margin-top:6px}
@@ -21,6 +19,9 @@ body{background:#1e3d6e;font-family:'Hiragino Kaku Gothic Pro',sans-serif;
   padding:11px 16px;font-size:13px;line-height:2;
   width:100%;max-width:540px;text-align:center}
 .hint-box b{color:#FFD700}
+.restore-banner{background:rgba(76,175,80,.2);border:1px solid rgba(76,175,80,.5);
+  border-radius:8px;padding:8px 16px;font-size:13px;color:#4CAF50;
+  display:none;text-align:center;width:100%;max-width:510px}
 .counter{font-size:15px;font-weight:bold;background:rgba(255,255,255,.1);
   border-radius:8px;padding:6px 18px;letter-spacing:.04em}
 .counter span{color:#FFD700}
@@ -64,8 +65,6 @@ body{background:#1e3d6e;font-family:'Hiragino Kaku Gothic Pro',sans-serif;
   -webkit-tap-highlight-color:transparent}
 #start-btn:active{transform:scale(.97)}
 #start-btn:disabled{background:#555;box-shadow:none;opacity:.5;cursor:not-allowed;transform:none}
-
-/* ====== GAME SCREEN ====== */
 #game{display:none;flex-direction:column;position:fixed;top:env(safe-area-inset-top);left:0;right:0;bottom:0;
   background:#1e3d6e;width:100%;height:100svh}
 .hdr{display:flex;align-items:center;justify-content:center;padding:10px 20px}
@@ -92,8 +91,6 @@ body{background:#1e3d6e;font-family:'Hiragino Kaku Gothic Pro',sans-serif;
   box-shadow:0 4px 12px rgba(0,0,0,.3);flex-shrink:0;transition:opacity .2s}
 .card img{width:88%;height:88%;object-fit:contain;pointer-events:none}
 .card.ghost{opacity:.2}
-
-/* ====== OVERLAYS ====== */
 #mv{display:none;position:fixed;inset:0;background:#000;z-index:100;
   align-items:center;justify-content:center;flex-direction:column}
 #mv video{max-width:100%;max-height:100svh}
@@ -141,12 +138,12 @@ body{background:#1e3d6e;font-family:'Hiragino Kaku Gothic Pro',sans-serif;
 </head>
 <body>
 
-<!-- ====== SETUP SCREEN ====== -->
 <div id="setup">
   <h1>🎮 画像マッチングゲーム</h1>
   <div class="hint-box">
     <b>① 画像を6枚タップして選択</b>　<b>② ムービー選択 or スキップ</b>　<b>③ ゲームスタート！</b>
   </div>
+  <div class="restore-banner" id="restore-banner">✅ 前回の設定を読み込みました</div>
   <div class="counter">選択済み：<span id="cnt">0</span> / 6枚</div>
   <div class="grid">
     <label class="slot target-s" id="slot-0" for="fi-0">
@@ -194,7 +191,6 @@ body{background:#1e3d6e;font-family:'Hiragino Kaku Gothic Pro',sans-serif;
   <button id="start-btn" disabled>ゲームスタート ▶</button>
 </div>
 
-<!-- ====== GAME SCREEN ====== -->
 <div id="game">
   <div class="hdr"><div class="dots" id="dots"></div></div>
   <div class="top"><div class="dz" id="dz">
@@ -203,27 +199,14 @@ body{background:#1e3d6e;font-family:'Hiragino Kaku Gothic Pro',sans-serif;
   </div></div>
   <div class="btm" id="choices"></div>
 </div>
-
-<!-- ムービーオーバーレイ -->
-<div id="mv">
-  <video id="vid" playsinline webkit-playsinline></video>
-  <button id="skip-mv">スキップ →</button>
-</div>
-
-<!-- フィードバック -->
+<div id="mv"><video id="vid" playsinline webkit-playsinline></video><button id="skip-mv">スキップ →</button></div>
 <div id="fb"></div>
-
-<!-- 花火 -->
 <div id="fw"></div>
-
-<!-- ムービー再生ゲート（iOSユーザー操作を確保） -->
 <div id="reward-tap">
   <div class="rt-emoji">🎉</div>
   <div class="rt-title">やったー！クリア！</div>
   <button id="watch-mv-btn">🎬 ムービーを見る！</button>
 </div>
-
-<!-- クリア画面 -->
 <div id="end">
   <div class="end-box">
     <div class="end-emoji">🎊</div>
@@ -242,6 +225,87 @@ var level=1,judging=false;
 var drag={el:null,cl:null,ox:0,oy:0};
 var movieObjectURL=null;
 
+/* ===== IndexedDB（動画保存用） ===== */
+var DB=null;
+function openDB(cb){
+  if(DB){cb(DB);return;}
+  var req=indexedDB.open('MatchingGame',1);
+  req.onupgradeneeded=function(e){e.target.result.createObjectStore('assets');};
+  req.onsuccess=function(e){DB=e.target.result;cb(DB);};
+  req.onerror=function(){cb(null);};
+}
+function saveVideoToDB(blob){
+  openDB(function(db){
+    if(!db)return;
+    var tx=db.transaction('assets','readwrite');
+    tx.objectStore('assets').put(blob,'video');
+  });
+}
+function loadVideoFromDB(cb){
+  openDB(function(db){
+    if(!db){cb(null);return;}
+    var tx=db.transaction('assets','readonly');
+    var req=tx.objectStore('assets').get('video');
+    req.onsuccess=function(e){cb(e.target.result||null);};
+    req.onerror=function(){cb(null);};
+  });
+}
+function clearVideoDB(){
+  openDB(function(db){
+    if(!db)return;
+    var tx=db.transaction('assets','readwrite');
+    tx.objectStore('assets').delete('video');
+  });
+}
+
+/* ===== 画像をlocalStorageに保存 ===== */
+function saveImage(i,dataURL){
+  try{localStorage.setItem('mg_img_'+i,dataURL);}catch(e){}
+}
+function saveSkip(v){
+  try{localStorage.setItem('mg_skip',v?'1':'0');}catch(e){}
+}
+function saveVideoName(name){
+  try{localStorage.setItem('mg_vidname',name);}catch(e){}
+}
+
+/* ===== 起動時に前回設定を復元 ===== */
+function restoreSettings(){
+  var restored=false;
+  for(var i=0;i<6;i++){
+    var d=localStorage.getItem('mg_img_'+i);
+    if(d){
+      S.imgs[i]=d;
+      var slot=document.getElementById('slot-'+i);
+      var p=slot.querySelector('.prev');p.src=d;
+      slot.classList.add('filled');
+      filled++;
+      restored=true;
+    }
+  }
+  document.getElementById('cnt').textContent=filled;
+
+  var skip=localStorage.getItem('mg_skip')==='1';
+  S.skipVideo=skip;
+  document.getElementById('skip-video').checked=skip;
+  if(skip){saveSkip(true);}
+
+  loadVideoFromDB(function(blob){
+    if(blob){
+      S.movieFile=blob;
+      var name=localStorage.getItem('mg_vidname')||'ムービー';
+      document.getElementById('mv-lbl').textContent=name.length>16?name.slice(0,14)+'…':name;
+      document.getElementById('mv-slot').classList.add('filled');
+      restored=true;
+    }
+    if(restored){
+      document.getElementById('restore-banner').style.display='block';
+    }
+    checkReady();
+  });
+}
+
+/* ===== 画像選択 ===== */
 function compress(dataURL,cb){
   var img=new Image();
   img.onload=function(){
@@ -266,6 +330,7 @@ for(var ii=0;ii<6;ii++){
           var p=slot.querySelector('.prev');p.src=c;
           slot.classList.add('filled');
           if(empty){filled++;document.getElementById('cnt').textContent=filled;}
+          saveImage(i,c);
           checkReady();
         });
       };
@@ -274,17 +339,23 @@ for(var ii=0;ii<6;ii++){
   })(ii);
 }
 
+/* ===== 動画選択 ===== */
 document.getElementById('fi-movie').addEventListener('change',function(){
   var file=this.files&&this.files[0];if(!file)return;
   S.movieFile=file;
-  var lbl=document.getElementById('mv-lbl');
-  lbl.textContent=file.name.length>16?file.name.slice(0,14)+'…':file.name;
+  var name=file.name.length>16?file.name.slice(0,14)+'…':file.name;
+  document.getElementById('mv-lbl').textContent=name;
   document.getElementById('mv-slot').classList.add('filled');
+  saveVideoToDB(file);
+  saveVideoName(file.name);
   checkReady();
 });
 
 document.getElementById('skip-video').addEventListener('change',function(){
-  S.skipVideo=this.checked;checkReady();
+  S.skipVideo=this.checked;
+  saveSkip(this.checked);
+  if(this.checked){clearVideoDB();S.movieFile=null;}
+  checkReady();
 });
 
 function checkReady(){
@@ -292,6 +363,7 @@ function checkReady(){
   document.getElementById('start-btn').disabled=!ok;
 }
 
+/* ===== ゲーム開始 ===== */
 document.getElementById('start-btn').addEventListener('click',function(){
   IMGS=S.imgs.slice();
   HAS_MOVIE=!S.skipVideo&&S.movieFile!==null;
@@ -312,9 +384,7 @@ document.getElementById('back-btn').addEventListener('click',function(){
   document.getElementById('game').style.display='none';
   document.getElementById('setup').style.display='flex';
 });
-
 document.getElementById('skip-mv').addEventListener('click',endReward);
-
 document.getElementById('watch-mv-btn').addEventListener('click',function(){
   document.getElementById('reward-tap').style.display='none';
   if(movieObjectURL){URL.revokeObjectURL(movieObjectURL);movieObjectURL=null;}
@@ -322,11 +392,11 @@ document.getElementById('watch-mv-btn').addEventListener('click',function(){
   var v=document.getElementById('vid');
   v.src=movieObjectURL;
   document.getElementById('mv').style.display='flex';
-  var p=v.play();
-  if(p&&p.catch)p.catch(function(){});
+  var p=v.play();if(p&&p.catch)p.catch(function(){});
   v.onended=endReward;
 });
 
+/* ===== ゲームロジック ===== */
 function buildDots(){
   var c=document.getElementById('dots');c.innerHTML='';
   for(var i=1;i<=6;i++){var d=document.createElement('div');d.className='dot';d.dataset.lv=i;c.appendChild(d);}
@@ -405,11 +475,8 @@ function feedback(txt,cls,ms,cb){
   setTimeout(function(){el.className='';if(cb)cb();},ms);
 }
 function showReward(){
-  if(HAS_MOVIE){
-    document.getElementById('reward-tap').style.display='flex';
-  }else{
-    startFireworks();
-  }
+  if(HAS_MOVIE){document.getElementById('reward-tap').style.display='flex';}
+  else{startFireworks();}
 }
 function endReward(){
   var v=document.getElementById('vid');
@@ -432,6 +499,9 @@ function startFireworks(){
     fw.appendChild(p);setTimeout(function(){p.remove();},1500);
   },80);
 }
+
+/* ===== 起動 ===== */
+restoreSettings();
 </script>
 </body>
 </html>
