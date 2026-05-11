@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-fullscreen">
+<meta name="apple-mobile-web-app-title" content="マッチングゲーム">
 <title>画像マッチングゲーム</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -35,6 +38,402 @@ body{background:#1e3d6e;font-family:'Hiragino Kaku Gothic Pro',sans-serif;
 .slot.filled .icon,.slot.filled .lbl{display:none}
 .slot .lbl{font-size:10px;color:rgba(255,255,255,.5);text-align:center;
   padding:3px 4px;margin-top:3px;pointer-events:none}
+.badge{position:absolute;top:3px;left:50%;transform:translateX(-50%);
+  background:#FFD700;color:#333;font-size:9px;font-weight:bold;
+  padding:2px 5px;border-radius:4px;white-space:nowrap;pointer-events:none}
+.ck{position:absolute;top:4px;right:4px;background:#4CAF50;color:#fff;
+  font-size:12px;width:20px;height:20px;border-radius:50%;
+  display:none;align-items:center;justify-content:center;pointer-events:none}
+.slot.filled .ck{display:flex}
+.movie-wrap{display:flex;flex-direction:column;align-items:center;gap:8px}
+.mv-slot{width:110px;height:110px;background:rgba(0,0,0,.3);
+  border:3px dashed rgba(255,255,255,.35);border-radius:14px;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
+  position:relative;-webkit-tap-highlight-color:transparent}
+.mv-slot.filled{border-style:solid;border-color:#4CAF50}
+.mv-slot input[type=file]{position:absolute;width:0;height:0;opacity:0}
+.mv-slot .icon{font-size:26px;pointer-events:none}
+.mv-slot .lbl{font-size:10px;color:rgba(255,255,255,.6);text-align:center;
+  padding:0 5px;max-width:100px;pointer-events:none}
+.skip-lbl{display:flex;align-items:center;gap:7px;font-size:13px;
+  color:rgba(255,255,255,.8);cursor:pointer}
+#start-btn{background:#4CAF50;color:#fff;border:none;padding:16px 54px;
+  font-size:22px;font-weight:bold;border-radius:14px;cursor:pointer;
+  letter-spacing:.08em;box-shadow:0 4px 16px rgba(76,175,80,.4);margin-top:4px;
+  -webkit-tap-highlight-color:transparent}
+#start-btn:active{transform:scale(.97)}
+#start-btn:disabled{background:#555;box-shadow:none;opacity:.5;cursor:not-allowed;transform:none}
+
+/* ====== GAME SCREEN ====== */
+#game{display:none;flex-direction:column;position:fixed;inset:0;
+  background:#1e3d6e;width:100%;height:100svh}
+.hdr{display:flex;align-items:center;justify-content:center;padding:10px 20px}
+.dots{display:flex;gap:10px}
+.dot{width:14px;height:14px;border-radius:50%;background:rgba(255,255,255,.2);
+  border:2px solid rgba(255,255,255,.4);transition:background .3s}
+.dot.done{background:#FFD700;border-color:#FFD700}
+.dot.cur{background:#fff;border-color:#fff}
+.top{flex:1;display:flex;align-items:center;justify-content:center}
+.dz{width:clamp(150px,22vw,240px);height:clamp(150px,22vw,240px);
+  border:4px dashed rgba(255,255,255,.4);border-radius:18px;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(255,255,255,.05);transition:.15s;position:relative}
+.dz.over{border-color:#FFD700;background:rgba(255,215,0,.15);transform:scale(1.04)}
+.dz>img{width:88%;height:88%;object-fit:contain;pointer-events:none}
+.droplbl{position:absolute;bottom:-28px;left:50%;transform:translateX(-50%);
+  font-size:13px;color:rgba(255,255,255,.5);white-space:nowrap}
+.btm{background:rgba(0,0,0,.25);padding:clamp(10px,2vw,18px);
+  min-height:clamp(120px,18vh,180px);display:flex;align-items:center;
+  justify-content:center;gap:clamp(8px,2vw,18px);flex-wrap:wrap}
+.card{width:clamp(90px,13vw,145px);height:clamp(90px,13vw,145px);
+  background:#fff;border-radius:12px;display:flex;align-items:center;
+  justify-content:center;cursor:grab;touch-action:none;overflow:hidden;
+  box-shadow:0 4px 12px rgba(0,0,0,.3);flex-shrink:0;transition:opacity .2s}
+.card img{width:88%;height:88%;object-fit:contain;pointer-events:none}
+.card.ghost{opacity:.2}
+
+/* ====== OVERLAYS ====== */
+#mv{display:none;position:fixed;inset:0;background:#000;z-index:100;
+  align-items:center;justify-content:center;flex-direction:column}
+#mv video{max-width:100%;max-height:100svh}
+#skip-mv{position:absolute;bottom:28px;right:28px;background:rgba(255,255,255,.2);
+  color:#fff;border:2px solid rgba(255,255,255,.5);padding:12px 24px;
+  font-size:18px;border-radius:10px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+#fb{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+  pointer-events:none;z-index:200;opacity:0;transition:opacity .2s;
+  font-size:clamp(50px,9vw,90px);font-weight:bold;text-shadow:0 4px 20px rgba(0,0,0,.6)}
+#fb.show{opacity:1}
+#fb.ok{background:rgba(76,175,80,.15);color:#4CAF50}
+#fb.ng{color:#F44336;animation:shake .5s ease}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-16px)}
+  40%{transform:translateX(16px)}60%{transform:translateX(-10px)}80%{transform:translateX(10px)}}
+.dclone{position:fixed;pointer-events:none;z-index:9999;border-radius:12px;
+  box-shadow:0 10px 30px rgba(0,0,0,.4);transform:scale(1.08);opacity:.9;
+  background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.dclone img{width:88%;height:88%;object-fit:contain}
+#fw{display:none;position:fixed;inset:0;pointer-events:none;z-index:300;overflow:hidden}
+.particle{position:absolute;width:14px;height:14px;border-radius:50%;
+  animation:pop 1s ease-out forwards}
+@keyframes pop{0%{transform:scale(0);opacity:1}100%{transform:scale(3);opacity:0}}
+#reward-tap{display:none;position:fixed;inset:0;z-index:350;
+  background:rgba(0,0,0,.88);align-items:center;justify-content:center;
+  flex-direction:column;gap:24px}
+#reward-tap .rt-emoji{font-size:68px}
+#reward-tap .rt-title{font-size:26px;color:#FFD700;font-weight:bold;letter-spacing:.06em}
+#watch-mv-btn{background:#e74c3c;color:#fff;border:none;padding:18px 48px;
+  font-size:22px;font-weight:bold;border-radius:14px;cursor:pointer;
+  box-shadow:0 4px 18px rgba(231,76,60,.5);-webkit-tap-highlight-color:transparent}
+#watch-mv-btn:active{transform:scale(.96)}
+#end{display:none;position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.75);
+  align-items:center;justify-content:center}
+.end-box{background:#1e3d6e;border:3px solid #FFD700;border-radius:24px;
+  padding:36px 44px;text-align:center;display:flex;flex-direction:column;
+  align-items:center;gap:18px;min-width:260px}
+.end-emoji{font-size:56px}
+.end-title{font-size:24px;font-weight:bold;color:#FFD700}
+.ebtn{width:100%;background:#4CAF50;color:#fff;border:none;padding:14px;
+  font-size:18px;font-weight:bold;border-radius:12px;cursor:pointer;
+  -webkit-tap-highlight-color:transparent}
+.ebtn:active{transform:scale(.97)}
+.ebtn.out{background:transparent;border:2px solid rgba(255,255,255,.5);color:rgba(255,255,255,.8)}
+</style>
+</head>
+<body>
+
+<!-- ====== SETUP SCREEN ====== -->
+<div id="setup">
+  <h1>🎮 画像マッチングゲーム</h1>
+  <div class="hint-box">
+    <b>① 画像を6枚タップして選択</b>　<b>② ムービー選択 or スキップ</b>　<b>③ ゲームスタート！</b>
+  </div>
+  <div class="counter">選択済み：<span id="cnt">0</span> / 6枚</div>
+  <div class="grid">
+    <label class="slot target-s" id="slot-0" for="fi-0">
+      <input type="file" id="fi-0" accept="image/*">
+      <div class="badge">★ターゲット</div><div class="ck">✓</div>
+      <span class="icon">🖼</span><span class="lbl">← タップ</span>
+      <img class="prev" alt="">
+    </label>
+    <label class="slot" id="slot-1" for="fi-1">
+      <input type="file" id="fi-1" accept="image/*">
+      <div class="ck">✓</div><span class="icon">🖼</span><span class="lbl">画像2</span>
+      <img class="prev" alt="">
+    </label>
+    <label class="slot" id="slot-2" for="fi-2">
+      <input type="file" id="fi-2" accept="image/*">
+      <div class="ck">✓</div><span class="icon">🖼</span><span class="lbl">画像3</span>
+      <img class="prev" alt="">
+    </label>
+    <label class="slot" id="slot-3" for="fi-3">
+      <input type="file" id="fi-3" accept="image/*">
+      <div class="ck">✓</div><span class="icon">🖼</span><span class="lbl">画像4</span>
+      <img class="prev" alt="">
+    </label>
+    <label class="slot" id="slot-4" for="fi-4">
+      <input type="file" id="fi-4" accept="image/*">
+      <div class="ck">✓</div><span class="icon">🖼</span><span class="lbl">画像5</span>
+      <img class="prev" alt="">
+    </label>
+    <label class="slot" id="slot-5" for="fi-5">
+      <input type="file" id="fi-5" accept="image/*">
+      <div class="ck">✓</div><span class="icon">🖼</span><span class="lbl">画像6</span>
+      <img class="prev" alt="">
+    </label>
+  </div>
+  <div class="movie-wrap">
+    <label class="mv-slot" id="mv-slot" for="fi-movie">
+      <input type="file" id="fi-movie" accept="video/*">
+      <span class="icon">🎬</span>
+      <span class="lbl" id="mv-lbl">ご褒美ムービー（タップ）</span>
+    </label>
+    <label class="skip-lbl">
+      <input type="checkbox" id="skip-video"> ムービーなし（花火アニメ）
+    </label>
+  </div>
+  <button id="start-btn" disabled>ゲームスタート ▶</button>
+</div>
+
+<!-- ====== GAME SCREEN ====== -->
+<div id="game">
+  <div class="hdr"><div class="dots" id="dots"></div></div>
+  <div class="top"><div class="dz" id="dz">
+    <img id="tgt" src="" alt="">
+    <div class="droplbl">ここにドラッグ</div>
+  </div></div>
+  <div class="btm" id="choices"></div>
+</div>
+
+<!-- ムービーオーバーレイ -->
+<div id="mv">
+  <video id="vid" playsinline webkit-playsinline></video>
+  <button id="skip-mv">スキップ →</button>
+</div>
+
+<!-- フィードバック -->
+<div id="fb"></div>
+
+<!-- 花火 -->
+<div id="fw"></div>
+
+<!-- ムービー再生ゲート（iOSユーザー操作を確保） -->
+<div id="reward-tap">
+  <div class="rt-emoji">🎉</div>
+  <div class="rt-title">やったー！クリア！</div>
+  <button id="watch-mv-btn">🎬 ムービーを見る！</button>
+</div>
+
+<!-- クリア画面 -->
+<div id="end">
+  <div class="end-box">
+    <div class="end-emoji">🎊</div>
+    <div class="end-title">ゲームクリア！</div>
+    <button class="ebtn" id="replay-btn">もう一度！</button>
+    <button class="ebtn out" id="back-btn">設定に戻る</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+var S={imgs:['','','','','',''],movieFile:null,skipVideo:false};
+var filled=0;
+var IMGS=[],MOVIE_FILE=null,HAS_MOVIE=false;
+var level=1,judging=false;
+var drag={el:null,cl:null,ox:0,oy:0};
+var movieObjectURL=null;
+
+function compress(dataURL,cb){
+  var img=new Image();
+  img.onload=function(){
+    var MAX=500,s=Math.min(MAX/img.width,MAX/img.height,1);
+    var w=Math.round(img.width*s),h=Math.round(img.height*s);
+    var c=document.createElement('canvas');c.width=w;c.height=h;
+    c.getContext('2d').drawImage(img,0,0,w,h);
+    cb(c.toDataURL('image/jpeg',0.85));
+  };
+  img.src=dataURL;
+}
+
+for(var ii=0;ii<6;ii++){
+  (function(i){
+    document.getElementById('fi-'+i).addEventListener('change',function(){
+      var file=this.files&&this.files[0];if(!file)return;
+      var r=new FileReader();
+      r.onload=function(e){
+        compress(e.target.result,function(c){
+          var empty=S.imgs[i]==='';S.imgs[i]=c;
+          var slot=document.getElementById('slot-'+i);
+          var p=slot.querySelector('.prev');p.src=c;
+          slot.classList.add('filled');
+          if(empty){filled++;document.getElementById('cnt').textContent=filled;}
+          checkReady();
+        });
+      };
+      r.readAsDataURL(file);
+    });
+  })(ii);
+}
+
+document.getElementById('fi-movie').addEventListener('change',function(){
+  var file=this.files&&this.files[0];if(!file)return;
+  S.movieFile=file;
+  var lbl=document.getElementById('mv-lbl');
+  lbl.textContent=file.name.length>16?file.name.slice(0,14)+'…':file.name;
+  document.getElementById('mv-slot').classList.add('filled');
+  checkReady();
+});
+
+document.getElementById('skip-video').addEventListener('change',function(){
+  S.skipVideo=this.checked;checkReady();
+});
+
+function checkReady(){
+  var ok=S.imgs.every(function(u){return u!=='';})&&(S.skipVideo||S.movieFile!==null);
+  document.getElementById('start-btn').disabled=!ok;
+}
+
+document.getElementById('start-btn').addEventListener('click',function(){
+  IMGS=S.imgs.slice();
+  HAS_MOVIE=!S.skipVideo&&S.movieFile!==null;
+  MOVIE_FILE=HAS_MOVIE?S.movieFile:null;
+  level=1;judging=false;
+  document.getElementById('setup').style.display='none';
+  document.getElementById('game').style.display='flex';
+  document.getElementById('end').style.display='none';
+  buildDots();renderLevel(1);
+});
+
+document.getElementById('replay-btn').addEventListener('click',function(){
+  document.getElementById('end').style.display='none';
+  level=1;judging=false;renderLevel(1);
+});
+document.getElementById('back-btn').addEventListener('click',function(){
+  document.getElementById('end').style.display='none';
+  document.getElementById('game').style.display='none';
+  document.getElementById('setup').style.display='flex';
+});
+
+document.getElementById('skip-mv').addEventListener('click',endReward);
+
+document.getElementById('watch-mv-btn').addEventListener('click',function(){
+  document.getElementById('reward-tap').style.display='none';
+  if(movieObjectURL){URL.revokeObjectURL(movieObjectURL);movieObjectURL=null;}
+  movieObjectURL=URL.createObjectURL(MOVIE_FILE);
+  var v=document.getElementById('vid');
+  v.src=movieObjectURL;
+  document.getElementById('mv').style.display='flex';
+  var p=v.play();
+  if(p&&p.catch)p.catch(function(){});
+  v.onended=endReward;
+});
+
+function buildDots(){
+  var c=document.getElementById('dots');c.innerHTML='';
+  for(var i=1;i<=6;i++){var d=document.createElement('div');d.className='dot';d.dataset.lv=i;c.appendChild(d);}
+}
+function updateDots(lv){
+  document.querySelectorAll('.dot').forEach(function(d){
+    var n=parseInt(d.dataset.lv);
+    d.className='dot'+(n<lv?' done':n===lv?' cur':'');
+  });
+}
+function shuffle(a){
+  for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t;}
+  return a;
+}
+function renderLevel(lv){
+  level=lv;updateDots(lv);
+  document.getElementById('tgt').src=IMGS[0];
+  document.getElementById('dz').classList.remove('over');
+  var idx=[];for(var i=0;i<lv;i++)idx.push(i);shuffle(idx);
+  var area=document.getElementById('choices');area.innerHTML='';
+  for(var j=0;j<idx.length;j++){
+    var ii=idx[j];
+    var card=document.createElement('div');card.className='card';card.dataset.i=ii;
+    var img=document.createElement('img');img.src=IMGS[ii];
+    card.appendChild(img);bindDrag(card);area.appendChild(card);
+  }
+}
+function bindDrag(card){
+  card.addEventListener('touchstart',onTS,{passive:false});
+  card.addEventListener('touchmove',onTM,{passive:false});
+  card.addEventListener('touchend',onTE,{passive:false});
+  card.addEventListener('mousedown',onMD);
+}
+function startDrag(card,cx,cy){
+  var r=card.getBoundingClientRect();
+  drag.el=card;drag.ox=cx-r.left;drag.oy=cy-r.top;
+  var cl=document.createElement('div');cl.className='dclone';
+  cl.style.cssText='width:'+r.width+'px;height:'+r.height+'px;left:'+r.left+'px;top:'+r.top+'px';
+  var img=document.createElement('img');img.src=card.querySelector('img').src;
+  cl.appendChild(img);document.body.appendChild(cl);
+  drag.cl=cl;card.classList.add('ghost');
+}
+function moveDrag(cx,cy){
+  if(!drag.cl)return;
+  drag.cl.style.left=(cx-drag.ox)+'px';drag.cl.style.top=(cy-drag.oy)+'px';
+  document.getElementById('dz').classList.toggle('over',isOver(cx,cy));
+}
+function endDrag(cx,cy){
+  if(!drag.el)return;
+  if(drag.cl){drag.cl.remove();drag.cl=null;}
+  drag.el.classList.remove('ghost');
+  document.getElementById('dz').classList.remove('over');
+  if(isOver(cx,cy))judge(parseInt(drag.el.dataset.i));
+  drag.el=null;
+}
+function isOver(cx,cy){
+  var r=document.getElementById('dz').getBoundingClientRect();
+  return cx>=r.left&&cx<=r.right&&cy>=r.top&&cy<=r.bottom;
+}
+function onTS(e){e.preventDefault();var t=e.touches[0];startDrag(e.currentTarget,t.clientX,t.clientY);}
+function onTM(e){e.preventDefault();var t=e.touches[0];moveDrag(t.clientX,t.clientY);}
+function onTE(e){e.preventDefault();var t=e.changedTouches[0];endDrag(t.clientX,t.clientY);}
+function onMD(e){
+  e.preventDefault();startDrag(e.currentTarget,e.clientX,e.clientY);
+  function mm(e2){moveDrag(e2.clientX,e2.clientY);}
+  function mu(e2){endDrag(e2.clientX,e2.clientY);document.removeEventListener('mousemove',mm);document.removeEventListener('mouseup',mu);}
+  document.addEventListener('mousemove',mm);document.addEventListener('mouseup',mu);
+}
+function judge(i){
+  if(judging)return;
+  if(i===0){judging=true;feedback('せいかい!','ok',1200,function(){judging=false;if(level>=6)showReward();else renderLevel(level+1);});}
+  else{feedback('もういちど','ng',700,null);}
+}
+function feedback(txt,cls,ms,cb){
+  var el=document.getElementById('fb');el.textContent=txt;el.className='show '+cls;
+  setTimeout(function(){el.className='';if(cb)cb();},ms);
+}
+function showReward(){
+  if(HAS_MOVIE){
+    document.getElementById('reward-tap').style.display='flex';
+  }else{
+    startFireworks();
+  }
+}
+function endReward(){
+  var v=document.getElementById('vid');
+  v.pause();v.removeAttribute('src');v.load();
+  if(movieObjectURL){URL.revokeObjectURL(movieObjectURL);movieObjectURL=null;}
+  document.getElementById('mv').style.display='none';
+  document.getElementById('reward-tap').style.display='none';
+  document.getElementById('end').style.display='flex';
+}
+function startFireworks(){
+  var fw=document.getElementById('fw');fw.style.display='block';
+  var count=0;
+  var timer=setInterval(function(){
+    if(count++>60){clearInterval(timer);fw.style.display='none';fw.innerHTML='';
+      document.getElementById('end').style.display='flex';return;}
+    var p=document.createElement('div');p.className='particle';
+    p.style.left=Math.random()*100+'vw';p.style.top=Math.random()*100+'vh';
+    p.style.background='hsl('+Math.floor(Math.random()*360)+',90%,60%)';
+    p.style.animationDuration=(0.5+Math.random())+'s';
+    fw.appendChild(p);setTimeout(function(){p.remove();},1500);
+  },80);
+}
+</script>
+</body>
+</html>  padding:3px 4px;margin-top:3px;pointer-events:none}
 .badge{position:absolute;top:3px;left:50%;transform:translateX(-50%);
   background:#FFD700;color:#333;font-size:9px;font-weight:bold;
   padding:2px 5px;border-radius:4px;white-space:nowrap;pointer-events:none}
