@@ -396,6 +396,39 @@ document.getElementById('watch-mv-btn').addEventListener('click',function(){
   v.onended=endReward;
 });
 
+/* ===== 効果音 ===== */
+var audioCtx=null;
+function getCtx(){
+  if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  if(audioCtx.state==='suspended')audioCtx.resume();
+  return audioCtx;
+}
+function playTone(freq,delay,dur,type,vol){
+  var ctx=getCtx();
+  var osc=ctx.createOscillator();var g=ctx.createGain();
+  osc.connect(g);g.connect(ctx.destination);
+  osc.type=type||'sine';osc.frequency.value=freq;
+  g.gain.setValueAtTime(vol||0.28,ctx.currentTime+delay);
+  g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+delay+dur);
+  osc.start(ctx.currentTime+delay);osc.stop(ctx.currentTime+delay+dur+0.01);
+}
+function soundCorrect(){
+  playTone(523,0,.14);
+  playTone(659,.13,.14);
+  playTone(784,.26,.28);
+}
+function soundWrong(){
+  var ctx=getCtx();
+  var osc=ctx.createOscillator();var g=ctx.createGain();
+  osc.connect(g);g.connect(ctx.destination);
+  osc.type='sine';
+  osc.frequency.setValueAtTime(360,ctx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(140,ctx.currentTime+0.38);
+  g.gain.setValueAtTime(0.22,ctx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.38);
+  osc.start(ctx.currentTime);osc.stop(ctx.currentTime+0.39);
+}
+
 /* ===== ゲームロジック ===== */
 function buildDots(){
   var c=document.getElementById('dots');c.innerHTML='';
@@ -452,8 +485,9 @@ function moveDrag(cx,cy){
     document.getElementById('dz').classList.remove('over');
     if(idx===0){
       cl.remove();card.classList.remove('ghost');
-      judge();
+      soundCorrect();judge();
     }else{
+      soundWrong();
       var tr=card.getBoundingClientRect();
       var _=cl.offsetLeft;
       cl.style.transition='left .4s cubic-bezier(.4,0,.2,1),top .4s cubic-bezier(.4,0,.2,1),opacity .4s ease';
