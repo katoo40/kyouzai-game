@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="数字ならべ">
+<title>数字ならべゲーム</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:#1e3d6e;font-family:'Hiragino Kaku Gothic Pro',sans-serif;
+  color:#fff;-webkit-user-select:none;user-select:none;
+  -webkit-tap-highlight-color:transparent;
+  padding:max(20px,env(safe-area-inset-top)) 8px 24px;
+  min-height:100svh;display:flex;flex-direction:column;
+  align-items:center;justify-content:flex-start;gap:16px;overflow-y:auto}
+
+/* ===== 設定画面 ===== */
+#setup{position:fixed;inset:0;background:#1e3d6e;z-index:500;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:24px;padding:max(24px,env(safe-area-inset-top)) 20px 32px}
+#setup h1{font-size:22px;letter-spacing:.08em;text-align:center}
+.hint-box{background:rgba(255,255,255,.1);border-radius:12px;
+  padding:12px 18px;font-size:14px;line-height:2;
+  width:100%;max-width:480px;text-align:center}
+.hint-box b{color:#FFD700}
+.movie-wrap{display:flex;flex-direction:column;align-items:center;gap:10px}
+.mv-slot{width:120px;height:120px;background:rgba(0,0,0,.3);
+  border:3px dashed rgba(255,255,255,.35);border-radius:14px;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+  position:relative;-webkit-tap-highlight-color:transparent}
+.mv-slot.filled{border-style:solid;border-color:#4CAF50}
+.mv-slot input[type=file]{position:absolute;width:0;height:0;opacity:0}
+.mv-slot .icon{font-size:30px;pointer-events:none}
+.mv-slot .lbl{font-size:11px;color:rgba(255,255,255,.65);text-align:center;
+  padding:0 6px;max-width:110px;pointer-events:none}
+.skip-lbl{display:flex;align-items:center;gap:8px;font-size:14px;
+  color:rgba(255,255,255,.85);cursor:pointer}
+#start-btn{background:#4CAF50;color:#fff;border:none;padding:16px 54px;
+  font-size:22px;font-weight:bold;border-radius:14px;cursor:pointer;
+  letter-spacing:.08em;box-shadow:0 4px 16px rgba(76,175,80,.4);
+  -webkit-tap-highlight-color:transparent}
+#start-btn:active{transform:scale(.97)}
+#start-btn:disabled{background:#555;box-shadow:none;opacity:.5;cursor:not-allowed}
+.restore-banner{background:rgba(76,175,80,.2);border:1px solid rgba(76,175,80,.5);
+  border-radius:8px;padding:8px 16px;font-size:13px;color:#a8e6a3;text-align:center}
+
+/* ===== ゲーム画面 ===== */
+h1{font-size:22px;letter-spacing:.08em;text-align:center}
+.hint{font-size:14px;color:rgba(255,255,255,.7);text-align:center;min-height:20px}
+#rows-container{width:100%;max-width:960px;background:rgba(0,0,0,.25);
+  border-radius:18px;overflow:hidden;display:flex;flex-direction:column}
+.row-section{padding:8px 10px;border-top:1px solid rgba(255,255,255,.08);transition:background .4s}
+#row-section-0{border-top:none}
+.row-section.done-section{background:rgba(76,175,80,.15)}
+.row-section.new-section{opacity:0;transform:translateY(8px);
+  transition:opacity .45s ease,transform .45s ease,background .4s}
+.row-section.new-section.visible{opacity:1;transform:translateY(0)}
+.nrow{display:flex;gap:5px;align-items:center;width:100%}
+.card{flex:1 1 0;min-width:44px;max-width:88px;aspect-ratio:1;
+  background:#fff;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:clamp(14px,3.2vw,28px);font-weight:bold;color:#1e3d6e;
+  cursor:grab;touch-action:none;box-shadow:0 3px 10px rgba(0,0,0,.28);
+  user-select:none;transition:opacity .15s,transform .1s,background .3s,color .3s}
+.card.ghost{opacity:.2;transform:scale(.94)}
+.card.done{background:#4CAF50;color:#fff;cursor:default;box-shadow:0 2px 6px rgba(76,175,80,.35)}
+.dclone{position:fixed;pointer-events:none;z-index:9999;border-radius:10px;
+  box-shadow:0 8px 26px rgba(0,0,0,.5);transform:scale(1.12);background:#FFD700;
+  display:flex;align-items:center;justify-content:center;font-weight:bold;color:#333}
+#answer-btn{background:#4CAF50;color:#fff;border:none;padding:15px 52px;
+  font-size:21px;font-weight:bold;border-radius:14px;cursor:pointer;
+  letter-spacing:.08em;box-shadow:0 4px 16px rgba(76,175,80,.4);
+  -webkit-tap-highlight-color:transparent;transition:.2s}
+#answer-btn:active{transform:scale(.97)}
+#answer-btn:disabled{background:#555;box-shadow:none;opacity:.5;cursor:not-allowed}
+#result{font-size:19px;font-weight:bold;min-height:28px;text-align:center;letter-spacing:.04em}
+#result.ok{color:#4CAF50}
+#result.ng{color:#ff6b6b}
+
+/* ===== ムービー ===== */
+#mv{display:none;position:fixed;inset:0;background:#000;z-index:100;
+  align-items:center;justify-content:center;flex-direction:column}
+#mv video{max-width:100%;max-height:100svh}
+#skip-mv{position:absolute;bottom:28px;right:28px;background:rgba(255,255,255,.2);
+  color:#fff;border:2px solid rgba(255,255,255,.5);padding:12px 24px;
+  font-size:18px;border-radius:10px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+#reward-tap{display:none;position:fixed;inset:0;z-index:350;
+  background:rgba(0,0,0,.88);align-items:center;justify-content:center;
+  flex-direction:column;gap:24px}
+#reward-tap .rt-emoji{font-size:68px}
+#reward-tap .rt-title{font-size:26px;color:#FFD700;font-weight:bold;letter-spacing:.06em}
+#watch-mv-btn{background:#e74c3c;color:#fff;border:none;padding:18px 48px;
+  font-size:22px;font-weight:bold;border-radius:14px;cursor:pointer;
+  box-shadow:0 4px 18px rgba(231,76,60,.5);-webkit-tap-highlight-color:transparent}
+#watch-mv-btn:active{transform:scale(.96)}
+</style>
+</head>
+<body>
+
+<!-- 設定画面 -->
+<div id="setup">
+  <h1>🔢 数字ならべゲーム</h1>
+  <div class="hint-box">
+    <b>① ご褒美ムービーを選ぶ</b><br>
+    <b>② ゲームスタート！</b>
+  </div>
+  <div id="restore-banner" class="restore-banner" style="display:none">
+    ✅ 前回のムービーを読み込みました
+  </div>
+  <div class="movie-wrap">
+    <label class="mv-slot" id="mv-slot" for="fi-movie">
+      <input type="file" id="fi-movie" accept="video/*">
+      <span class="icon">🎬</span>
+      <span class="lbl" id="mv-lbl">ご褒美ムービー（タップ）</span>
+    </label>
+    <label class="skip-lbl">
+      <input type="checkbox" id="skip-video"> ムービーなし
+    </label>
+  </div>
+  <button id="start-btn" disabled>ゲームスタート ▶</button>
+</div>
+
+<!-- ゲーム画面 -->
+<h1>🔢 数字ならべゲーム</h1>
+<p class="hint" id="hint">1から10の順に並べかえよう！</p>
+<div id="rows-container">
+  <div class="row-section" id="row-section-0"><div class="nrow" id="row-0"></div></div>
+  <div class="row-section new-section" id="row-section-1" style="display:none"><div class="nrow" id="row-1"></div></div>
+  <div class="row-section new-section" id="row-section-2" style="display:none"><div class="nrow" id="row-2"></div></div>
+  <div class="row-section new-section" id="row-section-3" style="display:none"><div class="nrow" id="row-3"></div></div>
+  <div class="row-section new-section" id="row-section-4" style="display:none"><div class="nrow" id="row-4"></div></div>
+</div>
+<button id="answer-btn">解答する ✓</button>
+<div id="result"></div>
+
+<!-- ムービー関連 -->
+<div id="mv"><video id="vid" playsinline webkit-playsinline></video><button id="skip-mv">スキップ →</button></div>
+<div id="reward-tap">
+  <div class="rt-emoji">🎉</div>
+  <div class="rt-title">やったー！全クリア！</div>
+  <button id="watch-mv-btn">🎬 ムービーを見る！</button>
+</div>
+
+<script>
+'use strict';
+var STAGES=[
+  [1,2,3,4,5,6,7,8,9,10],
+  [11,12,13,14,15,16,17,18,19,20],
+  [21,22,23,24,25,26,27,28,29,30],
+  [31,32,33,34,35,36,37,38,39,40],
+  [41,42,43,44,45,46,47,48,49,50]
+];
+var stageIdx=0;
+var order=[];
+var activeRow=null;
+var drag={val:null,fromIdx:-1,cl:null,ox:0,oy:0,w:0,h:0};
+var solved=false;
+var S_MOVIE=null,HAS_MOVIE=false,movieObjectURL=null;
+
+/* ===== IndexedDB ===== */
+var DB=null;
+function openDB(cb){
+  if(DB){cb(DB);return;}
+  var req=indexedDB.open('NumberSort',1);
+  req.onupgradeneeded=function(e){e.target.result.createObjectStore('assets');};
+  req.onsuccess=function(e){DB=e.target.result;cb(DB);};
+  req.onerror=function(){cb(null);};
+}
+function saveVideoToDB(blob){
+  openDB(function(db){
+    if(!db)return;
+    db.transaction('assets','readwrite').objectStore('assets').put(blob,'video');
+  });
+}
+function loadVideoFromDB(cb){
+  openDB(function(db){
+    if(!db){cb(null);return;}
+    var req=db.transaction('assets','readonly').objectStore('assets').get('video');
+    req.onsuccess=function(e){cb(e.target.result||null);};
+    req.onerror=function(){cb(null);};
+  });
+}
+function clearVideoDB(){
+  openDB(function(db){
+    if(!db)return;
+    db.transaction('assets','readwrite').objectStore('assets').delete('video');
+  });
+}
+
+/* ===== 設定画面 ===== */
+function checkReady(){
+  var skip=document.getElementById('skip-video').checked;
+  document.getElementById('start-btn').disabled=!(skip||S_MOVIE!==null);
+}
+
+document.getElementById('fi-movie').addEventListener('change',function(){
+  var file=this.files&&this.files[0];if(!file)return;
+  S_MOVIE=file;
+  var name=file.name.length>18?file.name.slice(0,16)+'…':file.name;
+  document.getElementById('mv-lbl').textContent=name;
+  document.getElementById('mv-slot').classList.add('filled');
+  saveVideoToDB(file);
+  try{localStorage.setItem('ns_vidname',file.name);}catch(e){}
+  checkReady();
+});
+
+document.getElementById('skip-video').addEventListener('change',function(){
+  if(this.checked){clearVideoDB();S_MOVIE=null;
+    document.getElementById('mv-slot').classList.remove('filled');
+    document.getElementById('mv-lbl').textContent='ご褒美ムービー（タップ）';
+    try{localStorage.removeItem('ns_vidname');}catch(e){}
+  }
+  try{localStorage.setItem('ns_skip',this.checked?'1':'0');}catch(e){}
+  checkReady();
+});
+
+document.getElementById('start-btn').addEventListener('click',function(){
+  HAS_MOVIE=!document.getElementById('skip-video').checked&&S_MOVIE!==null;
+  document.getElementById('setup').style.display='none';
+  startStage(0);
+});
+
+/* 前回設定を復元 */
+loadVideoFromDB(function(blob){
+  var skip=localStorage.getItem('ns_skip')==='1';
+  document.getElementById('skip-video').checked=skip;
+  if(blob&&!skip){
+    S_MOVIE=blob;
+    var name=localStorage.getItem('ns_vidname')||'ムービー';
+    document.getElementById('mv-lbl').textContent=name.length>18?name.slice(0,16)+'…':name;
+    document.getElementById('mv-slot').classList.add('filled');
+    document.getElementById('restore-banner').style.display='block';
+  }
+  checkReady();
+});
+
+/* ===== ゲームロジック ===== */
+function shuffle(a){
+  var b=a.slice();
+  for(var i=b.length-1;i>0;i--){
+    var j=Math.floor(Math.random()*(i+1));
+    var t=b[i];b[i]=b[j];b[j]=t;
+  }
+  var same=true;
+  for(var k=0;k<b.length;k++){if(b[k]!==a[k]){same=false;break;}}
+  return same?shuffle(a):b;
+}
+function swapOrder(i,j){var t=order[i];order[i]=order[j];order[j]=t;}
+
+function render(){
+  activeRow.innerHTML='';
+  order.forEach(function(val,idx){
+    var card=document.createElement('div');
+    card.className='card';card.textContent=val;
+    card.dataset.val=val;card.dataset.idx=idx;
+    bindCard(card);activeRow.appendChild(card);
+  });
+}
+function renderDuringDrag(){
+  activeRow.innerHTML='';
+  order.forEach(function(val,idx){
+    var card=document.createElement('div');
+    card.className='card'+(val===drag.val?' ghost':'');
+    card.textContent=val;card.dataset.val=val;card.dataset.idx=idx;
+    bindCard(card);activeRow.appendChild(card);
+  });
+}
+function bindCard(card){
+  card.addEventListener('touchstart',onTS,{passive:false});
+  card.addEventListener('touchmove',onTM,{passive:false});
+  card.addEventListener('touchend',onTE,{passive:false});
+  card.addEventListener('mousedown',onMD);
+}
+function startDrag(card,cx,cy){
+  if(solved)return;
+  var r=card.getBoundingClientRect();
+  drag.val=parseInt(card.dataset.val);drag.fromIdx=parseInt(card.dataset.idx);
+  drag.ox=cx-r.left;drag.oy=cy-r.top;drag.w=r.width;drag.h=r.height;
+  var cl=document.createElement('div');cl.className='dclone';cl.textContent=drag.val;
+  cl.style.cssText='width:'+r.width+'px;height:'+r.height+'px;left:'+r.left+'px;top:'+r.top+'px;font-size:'+Math.round(r.width*.38)+'px';
+  document.body.appendChild(cl);drag.cl=cl;card.classList.add('ghost');
+}
+function moveDrag(cx,cy){
+  if(!drag.cl)return;
+  drag.cl.style.left=(cx-drag.ox)+'px';drag.cl.style.top=(cy-drag.oy)+'px';
+  var dragCx=cx-drag.ox+drag.w/2;
+  var cards=Array.from(activeRow.querySelectorAll('.card'));
+  if(drag.fromIdx>0){
+    var lc=cards[drag.fromIdx-1];var lr=lc.getBoundingClientRect();
+    if(dragCx<lr.left+lr.width/2){swapOrder(drag.fromIdx,drag.fromIdx-1);drag.fromIdx--;renderDuringDrag();return;}
+  }
+  if(drag.fromIdx<order.length-1){
+    var rc=cards[drag.fromIdx+1];var rr=rc.getBoundingClientRect();
+    if(dragCx>rr.left+rr.width/2){swapOrder(drag.fromIdx,drag.fromIdx+1);drag.fromIdx++;renderDuringDrag();return;}
+  }
+}
+function endDrag(){
+  if(!drag.val)return;
+  if(drag.cl){drag.cl.remove();drag.cl=null;}
+  var ghost=activeRow.querySelector('.card.ghost');
+  if(ghost)ghost.classList.remove('ghost');
+  drag.val=null;drag.fromIdx=-1;
+}
+function onTS(e){e.preventDefault();var t=e.touches[0];startDrag(e.currentTarget,t.clientX,t.clientY);}
+function onTM(e){e.preventDefault();var t=e.touches[0];moveDrag(t.clientX,t.clientY);}
+function onTE(e){e.preventDefault();endDrag();}
+function onMD(e){
+  e.preventDefault();startDrag(e.currentTarget,e.clientX,e.clientY);
+  function mm(e2){moveDrag(e2.clientX,e2.clientY);}
+  function mu(){endDrag();document.removeEventListener('mousemove',mm);document.removeEventListener('mouseup',mu);}
+  document.addEventListener('mousemove',mm);document.addEventListener('mouseup',mu);
+}
+
+function lockStage(idx){
+  var row=document.getElementById('row-'+idx);
+  Array.from(row.querySelectorAll('.card')).forEach(function(c){
+    var n=c.cloneNode(true);n.classList.add('done');c.parentNode.replaceChild(n,c);
+  });
+  document.getElementById('row-section-'+idx).classList.add('done-section');
+}
+function startStage(idx){
+  stageIdx=idx;solved=false;
+  var nums=STAGES[idx];
+  order=shuffle(nums.slice());
+  activeRow=document.getElementById('row-'+idx);
+  if(idx>0){
+    var sec=document.getElementById('row-section-'+idx);
+    sec.style.display='block';
+    requestAnimationFrame(function(){requestAnimationFrame(function(){sec.classList.add('visible');});});
+    setTimeout(function(){sec.scrollIntoView({behavior:'smooth',block:'nearest'});},100);
+  }
+  document.getElementById('hint').textContent=nums[0]+'から'+nums[9]+'の順に並べかえよう！';
+  document.getElementById('result').textContent='';
+  document.getElementById('result').className='';
+  document.getElementById('answer-btn').disabled=false;
+  render();
+}
+
+document.getElementById('answer-btn').addEventListener('click',function(){
+  if(drag.val)return;
+  var nums=STAGES[stageIdx];
+  var correct=true;
+  for(var i=0;i<order.length;i++){if(order[i]!==nums[i]){correct=false;break;}}
+  var res=document.getElementById('result');
+  if(correct){
+    solved=true;
+    document.getElementById('answer-btn').disabled=true;
+    lockStage(stageIdx);
+    if(stageIdx<STAGES.length-1){
+      soundCorrect();
+      res.textContent='🎉 '+nums[0]+'〜'+nums[9]+' クリア！ 次のチャレンジへ…';
+      res.className='ok';
+      setTimeout(function(){startStage(stageIdx+1);},4000);
+    }else{
+      soundAllClear();
+      res.textContent='🎊 せいかい！ 1〜50 全部クリア！おめでとう！';
+      res.className='ok';
+      if(HAS_MOVIE){
+        setTimeout(function(){
+          document.getElementById('reward-tap').style.display='flex';
+        },3200);
+      }
+    }
+  }else{
+    res.textContent='❌ もう少し！ 並び順を確かめよう';
+    res.className='ng';
+    soundWrong();
+  }
+});
+
+/* ムービー再生 */
+document.getElementById('watch-mv-btn').addEventListener('click',function(){
+  document.getElementById('reward-tap').style.display='none';
+  if(movieObjectURL){URL.revokeObjectURL(movieObjectURL);movieObjectURL=null;}
+  movieObjectURL=URL.createObjectURL(S_MOVIE);
+  var v=document.getElementById('vid');
+  v.src=movieObjectURL;
+  document.getElementById('mv').style.display='flex';
+  var p=v.play();if(p&&p.catch)p.catch(function(){});
+  v.onended=endReward;
+});
+document.getElementById('skip-mv').addEventListener('click',endReward);
+function resetGame(){
+  for(var i=1;i<STAGES.length;i++){
+    var sec=document.getElementById('row-section-'+i);
+    sec.style.display='none';
+    sec.classList.remove('visible','done-section');
+    document.getElementById('row-'+i).innerHTML='';
+  }
+  document.getElementById('row-section-0').classList.remove('done-section');
+  stageIdx=0;solved=false;
+  document.getElementById('result').textContent='';
+  document.getElementById('result').className='';
+  document.getElementById('answer-btn').disabled=false;
+  startStage(0);
+}
+function endReward(){
+  var v=document.getElementById('vid');
+  v.pause();v.removeAttribute('src');v.load();
+  if(movieObjectURL){URL.revokeObjectURL(movieObjectURL);movieObjectURL=null;}
+  document.getElementById('mv').style.display='none';
+  resetGame();
+}
+
+/* ===== 効果音 ===== */
+var audioCtx=null;
+function getCtx(){
+  if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  if(audioCtx.state==='suspended')audioCtx.resume();
+  return audioCtx;
+}
+function playTone(freq,delay,dur){
+  var ctx=getCtx();var osc=ctx.createOscillator();var g=ctx.createGain();
+  osc.connect(g);g.connect(ctx.destination);osc.type='sine';osc.frequency.value=freq;
+  g.gain.setValueAtTime(0.28,ctx.currentTime+delay);
+  g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+delay+dur);
+  osc.start(ctx.currentTime+delay);osc.stop(ctx.currentTime+delay+dur+0.01);
+}
+function soundCorrect(){playTone(523,0,.14);playTone(659,.13,.14);playTone(784,.26,.28);}
+function soundWrong(){
+  var ctx=getCtx();var osc=ctx.createOscillator();var g=ctx.createGain();
+  osc.connect(g);g.connect(ctx.destination);osc.type='sine';
+  osc.frequency.setValueAtTime(360,ctx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(140,ctx.currentTime+0.38);
+  g.gain.setValueAtTime(0.22,ctx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.38);
+  osc.start(ctx.currentTime);osc.stop(ctx.currentTime+0.39);
+}
+function bellTone(freq,startTime,dur){
+  var ctx=getCtx();
+  var o1=ctx.createOscillator();var g1=ctx.createGain();
+  o1.connect(g1);g1.connect(ctx.destination);o1.type='sine';o1.frequency.value=freq;
+  g1.gain.setValueAtTime(0,startTime);g1.gain.linearRampToValueAtTime(0.32,startTime+0.012);
+  g1.gain.exponentialRampToValueAtTime(0.001,startTime+dur);
+  o1.start(startTime);o1.stop(startTime+dur+0.05);
+  var o2=ctx.createOscillator();var g2=ctx.createGain();
+  o2.connect(g2);g2.connect(ctx.destination);o2.type='sine';o2.frequency.value=freq*2.756;
+  g2.gain.setValueAtTime(0,startTime);g2.gain.linearRampToValueAtTime(0.14,startTime+0.008);
+  g2.gain.exponentialRampToValueAtTime(0.001,startTime+Math.min(dur*0.22,0.35));
+  o2.start(startTime);o2.stop(startTime+Math.min(dur*0.22,0.35)+0.05);
+  var o3=ctx.createOscillator();var g3=ctx.createGain();
+  o3.connect(g3);g3.connect(ctx.destination);o3.type='sine';o3.frequency.value=freq*5.404;
+  g3.gain.setValueAtTime(0,startTime);g3.gain.linearRampToValueAtTime(0.06,startTime+0.006);
+  g3.gain.exponentialRampToValueAtTime(0.001,startTime+Math.min(dur*0.1,0.12));
+  o3.start(startTime);o3.stop(startTime+Math.min(dur*0.1,0.12)+0.05);
+}
+function soundAllClear(){
+  var ctx=getCtx();var t=ctx.currentTime;
+  [523,587,659,784,880,1047].forEach(function(f,i){bellTone(f,t+i*0.08,1.0);});
+  [523,659,784,1047,1319].forEach(function(f){bellTone(f,t+0.58,3.0);});
+  bellTone(2093,t+0.72,2.5);
+}
+</script>
+</body>
+</html>
