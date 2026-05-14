@@ -289,11 +289,11 @@ function moveDrag(cx,cy){
   var cards=Array.from(activeRow.querySelectorAll('.card'));
   if(drag.fromIdx>0){
     var lc=cards[drag.fromIdx-1];var lr=lc.getBoundingClientRect();
-    if(dragCx<lr.left+lr.width/2){swapOrder(drag.fromIdx,drag.fromIdx-1);drag.fromIdx--;renderDuringDrag();return;}
+    if(dragCx<lr.left+lr.width/2){swapOrder(drag.fromIdx,drag.fromIdx-1);drag.fromIdx--;renderDuringDrag();soundSwap();return;}
   }
   if(drag.fromIdx<order.length-1){
     var rc=cards[drag.fromIdx+1];var rr=rc.getBoundingClientRect();
-    if(dragCx>rr.left+rr.width/2){swapOrder(drag.fromIdx,drag.fromIdx+1);drag.fromIdx++;renderDuringDrag();return;}
+    if(dragCx>rr.left+rr.width/2){swapOrder(drag.fromIdx,drag.fromIdx+1);drag.fromIdx++;renderDuringDrag();soundSwap();return;}
   }
 }
 function endDrag(){
@@ -417,6 +417,13 @@ function playTone(freq,delay,dur){
   g.gain.setValueAtTime(0.28,ctx.currentTime+delay);
   g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+delay+dur);
   osc.start(ctx.currentTime+delay);osc.stop(ctx.currentTime+delay+dur+0.01);
+}
+function soundSwap(){
+  var ctx=getCtx();var osc=ctx.createOscillator();var g=ctx.createGain();
+  osc.connect(g);g.connect(ctx.destination);osc.type='sine';osc.frequency.value=520;
+  g.gain.setValueAtTime(0.12,ctx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.07);
+  osc.start(ctx.currentTime);osc.stop(ctx.currentTime+0.08);
 }
 function soundCorrect(){playTone(523,0,.14);playTone(659,.13,.14);playTone(784,.26,.28);}
 function soundWrong(){
