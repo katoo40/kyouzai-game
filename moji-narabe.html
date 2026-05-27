@@ -70,9 +70,14 @@ body{background:#1e3d6e;font-family:'Hiragino Kaku Gothic Pro',sans-serif;
 
 /* ===== ゲーム画面 ===== */
 .game-title{font-size:20px;letter-spacing:.08em;text-align:center}
-.progress{font-size:15px;color:rgba(255,255,255,.7);text-align:center}
-#game-image{width:100%;max-width:340px;max-height:230px;object-fit:contain;
-  border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,.4);display:none}
+.hint-row{display:flex;align-items:center;justify-content:center;gap:12px;
+  width:100%;max-width:640px;padding:0 4px}
+.progress{font-size:15px;color:rgba(255,255,255,.7);text-align:right;white-space:nowrap;flex-shrink:0}
+#img-card{background:#2e5898;border-radius:18px;
+  padding:14px;display:none;
+  box-shadow:0 6px 24px rgba(0,0,0,.45)}
+#game-image{width:100%;max-width:312px;max-height:210px;object-fit:contain;
+  border-radius:10px;display:block}
 .hint{font-size:14px;color:rgba(255,255,255,.7);text-align:center}
 #tile-area{width:100%;max-width:640px;background:rgba(0,0,0,.25);
   border-radius:16px;padding:14px 10px}
@@ -91,7 +96,8 @@ body{background:#1e3d6e;font-family:'Hiragino Kaku Gothic Pro',sans-serif;
 #check-btn{background:#4CAF50;color:#fff;border:none;padding:15px 52px;
   font-size:21px;font-weight:bold;border-radius:14px;cursor:pointer;
   letter-spacing:.08em;box-shadow:0 4px 16px rgba(76,175,80,.4);
-  -webkit-tap-highlight-color:transparent;transition:.2s}
+  -webkit-tap-highlight-color:transparent;transition:.2s;
+  margin-top:max(36px,6vh)}
 #check-btn:active{transform:scale(.97)}
 #check-btn:disabled{background:#555;box-shadow:none;opacity:.5;cursor:not-allowed}
 #result{font-size:20px;font-weight:bold;min-height:28px;text-align:center;letter-spacing:.04em}
@@ -134,9 +140,11 @@ body{background:#1e3d6e;font-family:'Hiragino Kaku Gothic Pro',sans-serif;
 
 <!-- ゲーム画面 -->
 <h1 class="game-title">🔤 文字ならべゲーム</h1>
-<p class="progress" id="progress"></p>
-<img id="game-image" alt="問題の画像">
-<p class="hint">文字を正しい順番に並べよう！</p>
+<div class="hint-row">
+  <p class="hint">文字を正しい順番に並べよう！</p>
+  <p class="progress" id="progress"></p>
+</div>
+<div id="img-card"><img id="game-image" alt="問題の画像"></div>
 <div id="tile-area"><div class="trow" id="trow"></div></div>
 <button id="check-btn">解答する ✓</button>
 <div id="result"></div>
@@ -272,7 +280,7 @@ document.getElementById("back-btn").addEventListener("click",function(){
   document.getElementById("action-btns").style.display="none";
   document.getElementById("result").textContent="";
   document.getElementById("result").className="";
-  document.getElementById("game-image").style.display="none";
+  document.getElementById("img-card").style.display="none";
   document.getElementById("progress").textContent="";
 });
 
@@ -317,7 +325,7 @@ function startGame(){
 function initRound(){
   var q=QUESTIONS[qIdx];
   document.getElementById("game-image").src=q.url;
-  document.getElementById("game-image").style.display="block";
+  document.getElementById("img-card").style.display="block";
   document.getElementById("progress").textContent=
     QUESTIONS.length>1 ? "問題 "+(qIdx+1)+" / "+QUESTIONS.length : "";
   chars=[...q.text];
