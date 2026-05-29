@@ -660,10 +660,12 @@
     }
 
     canvas.addEventListener('touchstart', e => {
-      e.preventDefault();
+      // e.preventDefault() を呼ばない：iOS Safari はこれを呼ぶと
+      // touchstart をユーザージェスチャーと見なさず Web Audio がロックされる
+      // スクロール防止は CSS の touch-action:none + user-scalable=no が担う
       const [x, y] = pos(e.touches[0]);
       onStart(x, y);
-    }, { passive: false });
+    }, { passive: true });
 
     canvas.addEventListener('touchmove', e => {
       e.preventDefault();
