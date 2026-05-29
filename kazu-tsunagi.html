@@ -167,6 +167,45 @@
     #step-msg .sm-praise { font-size: 36px; font-weight: bold; color: #ff6d3a; margin: 6px 0; }
     #step-msg .sm-sub    { font-size: 19px; color: #5b9bd5; margin-top: 4px; }
 
+    /* ---- スプラッシュ画面 ---- */
+    #splash {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(160deg, #e8f5ff 0%, #fff8e8 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 32px;
+      z-index: 100;
+    }
+    .sp-title {
+      font-size: 36px;
+      font-weight: bold;
+      color: #3c79c0;
+      letter-spacing: 0.1em;
+      text-shadow: 0 2px 6px rgba(255,255,255,0.8);
+    }
+    .sp-sub {
+      font-size: 18px;
+      color: #5b9bd5;
+    }
+    .sp-btn {
+      padding: 22px 56px;
+      font-size: 24px;
+      font-weight: bold;
+      font-family: inherit;
+      background: #5b9bd5;
+      color: white;
+      border: none;
+      border-radius: 60px;
+      box-shadow: 0 6px 20px rgba(91,155,213,0.45);
+      cursor: pointer;
+      touch-action: manipulation;
+      letter-spacing: 0.08em;
+    }
+    .sp-btn:active { background: #3c79c0; transform: scale(0.97); }
+
     /* ---- ゲームクリア画面 ---- */
     #final-end {
       position: absolute;
@@ -211,6 +250,13 @@
   </style>
 </head>
 <body>
+  <!-- スプラッシュ（最初の1タップで音声ロック解除） -->
+  <div id="splash">
+    <div class="sp-title">かずつなぎ</div>
+    <div class="sp-sub">１から じゅんばんに つなごう！</div>
+    <button class="sp-btn" onclick="onSplashTap()">タップして はじめよう！</button>
+  </div>
+
   <canvas id="canvas"></canvas>
   <div id="circles-layer"></div>
   <div id="flash"></div>
@@ -595,22 +641,34 @@
     ================================================================ */
     let audioCtx = null;
 
-    // onStart() 内（touchstart / mousedown の直接コールバック）から呼ぶことで
-    // iOS・Mac 両方でユーザージェスチャー制約をクリアする
+    // スプラッシュのボタン click から呼ばれる（iOS で最も確実な unlock 方法）
+    function unlockAudioOnClick() {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      // click ハンドラ内で oscillator を即 start → iOS の audio activation を確実に取得
+      try {
+        const osc = audioCtx.createOscillator();
+        const g   = audioCtx.createGain();
+        g.gain.setValueAtTime(0, audioCtx.currentTime);  // 無音
+        osc.connect(g); g.connect(audioCtx.destination);
+        osc.start(audioCtx.currentTime);
+        osc.stop(audioCtx.currentTime + 0.01);
+      } catch(e) {}
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    // バックグラウンド復帰後の再ロック対策（touchstart から呼ぶ）
     function initAudio() {
-      if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      }
+      if (!audioCtx) return;
       if (audioCtx.state === 'suspended') {
         audioCtx.resume();
-        // iOS: ユーザージェスチャー内で無音バッファを start() することでロック解除
         try {
-          const buf = audioCtx.createBuffer(1, 1, audioCtx.sampleRate);
-          const src = audioCtx.createBufferSource();
-          src.buffer = buf;
-          src.connect(audioCtx.destination);
-          src.start(0);
-        } catch (e) {}
+          const osc = audioCtx.createOscillator();
+          const g   = audioCtx.createGain();
+          g.gain.setValueAtTime(0, audioCtx.currentTime);
+          osc.connect(g); g.connect(audioCtx.destination);
+          osc.start(audioCtx.currentTime);
+          osc.stop(audioCtx.currentTime + 0.01);
+        } catch(e) {}
       }
     }
 
@@ -628,7 +686,7 @@
           g.gain.setValueAtTime(vol, t);
           g.gain.exponentialRampToValueAtTime(0.001, t + dur);
           osc.start(t); osc.stop(t + dur + 0.02);
-        } catch (e) {}
+        } catch(e) {}
       };
 
       if (audioCtx.state === 'running') {
@@ -718,9 +776,17 @@
       render();
     });
 
-    /* ---- 起動 ---- */
+    /* ================================================================
+       スプラッシュ → ゲーム開始
+    ================================================================ */
+    function onSplashTap() {
+      unlockAudioOnClick();  // click ハンドラ内 = iOS で最も確実な audio unlock
+      document.getElementById('splash').style.display = 'none';
+      startTrial();
+    }
+
+    /* ---- 起動（スプラッシュを表示してゲームは待機） ---- */
     resizeCanvas();
-    startTrial();
   </script>
 </body>
 </html>
