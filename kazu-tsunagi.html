@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no,viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="かずつなぎ">
+  <title>かずつなぎ</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 100dvw;
+      height: 100dvh;
+      overflow: hidden;
+      background: linear-gradient(160deg, #e8f5ff 0%, #fff8e8 100%);
+      font-family: 'Hiragino Kaku Gothic Pro', 'Hiragino Sans', sans-serif;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: none;
+    }
+
+    #canvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      touch-action: none;
+    }
+
+    #circles-layer {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+    }
+
+    /* ---- 数字枠 ---- */
+    .num-circle {
+      position: absolute;
+      border-radius: 50%;
+      background: white;
+      border: 7px solid #5b9bd5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: #5b9bd5;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 5px 16px rgba(91,155,213,0.25);
+      transition: background 0.3s, color 0.3s, border-color 0.3s, box-shadow 0.3s;
+    }
+    .num-circle.active {
+      border-color: #ff6d3a;
+      color: #ff6d3a;
+      box-shadow: 0 0 0 8px rgba(255,109,58,0.20), 0 5px 16px rgba(255,109,58,0.25);
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+    .num-circle.completed {
+      background: #5b9bd5;
+      color: white;
+      border-color: #3c79c0;
+      animation: none;
+      box-shadow: 0 5px 16px rgba(60,121,192,0.35);
+    }
+    .num-circle.pop {
+      animation: pop-anim 0.35s ease-out forwards !important;
+    }
+    @keyframes pop-anim {
+      0%   { transform: translate(-50%,-50%) scale(1); }
+      40%  { transform: translate(-50%,-50%) scale(1.35); }
+      100% { transform: translate(-50%,-50%) scale(1); }
+    }
+    @keyframes pulse {
+      0%, 100% { transform: translate(-50%, -50%) scale(1); }
+      50%       { transform: translate(-50%, -50%) scale(1.10); }
+    }
+
+    /* ---- 進捗表示 ---- */
+    #progress {
+      position: absolute;
+      top: max(14px, env(safe-area-inset-top));
+      left: 0; right: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 7px;
+      pointer-events: none;
+      z-index: 10;
+    }
+    #prog-title {
+      font-size: 19px;
+      font-weight: bold;
+      color: #3c79c0;
+      text-shadow: 0 1px 4px rgba(255,255,255,0.9);
+      letter-spacing: 0.05em;
+    }
+    #prog-dots {
+      display: flex;
+      gap: 10px;
+    }
+    .pdot {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: rgba(91,155,213,0.15);
+      border: 3px solid #5b9bd5;
+      transition: background 0.4s, transform 0.3s;
+    }
+    .pdot.done {
+      background: #5b9bd5;
+      transform: scale(1.15);
+    }
+
+    /* ---- 画面フラッシュ ---- */
+    #flash {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at center, rgba(255,220,50,0.55) 0%, rgba(255,220,50,0) 70%);
+      pointer-events: none;
+      z-index: 24;
+      opacity: 0;
+      transition: opacity 0.08s ease-in;
+    }
+    #flash.on { opacity: 1; }
+
+    /* ---- 紙吹雪 ---- */
+    #particles {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 25;
+      overflow: hidden;
+    }
+    .confetti {
+      position: absolute;
+      border-radius: 3px;
+      animation: confetti-fall var(--dur) ease-out forwards;
+    }
+    @keyframes confetti-fall {
+      0%   { transform: translate(0,0) rotate(0deg) scale(1); opacity: 1; }
+      100% { transform: translate(var(--dx),var(--dy)) rotate(var(--rot)) scale(0.4); opacity: 0; }
+    }
+
+    /* ---- 中間正解メッセージ ---- */
+    #step-msg {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%) scale(0.7);
+      text-align: center;
+      background: white;
+      border-radius: 28px;
+      padding: 36px 56px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+      display: none;
+      z-index: 30;
+      opacity: 0;
+      transition: opacity 0.30s, transform 0.30s;
+    }
+    #step-msg.show {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+    #step-msg .sm-stars  { font-size: 44px; line-height: 1.3; }
+    #step-msg .sm-praise { font-size: 36px; font-weight: bold; color: #ff6d3a; margin: 6px 0; }
+    #step-msg .sm-sub    { font-size: 19px; color: #5b9bd5; margin-top: 4px; }
+
+    /* ---- ゲームクリア画面 ---- */
+    #final-end {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.60);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+    }
+    #final-end.show { display: flex; }
+    .end-box {
+      background: white;
+      border-radius: 32px;
+      padding: 50px 68px;
+      text-align: center;
+      box-shadow: 0 12px 48px rgba(0,0,0,0.25);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+    .end-box .e-stars  { font-size: 56px; }
+    .end-box .e-title  { font-size: 38px; font-weight: bold; color: #ff6d3a; }
+    .end-box .e-sub    { font-size: 22px; color: #5b9bd5; }
+    .end-box .e-btn {
+      margin-top: 10px;
+      padding: 16px 44px;
+      font-size: 20px;
+      font-weight: bold;
+      font-family: inherit;
+      background: #5b9bd5;
+      color: white;
+      border: none;
+      border-radius: 50px;
+      box-shadow: 0 5px 14px rgba(91,155,213,0.40);
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .end-box .e-btn:active { background: #3c79c0; }
+
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="circles-layer"></div>
+  <div id="flash"></div>
+  <div id="particles"></div>
+
+  <!-- 進捗 -->
+  <div id="progress">
+    <div id="prog-title">１〜５　じゅんばんに つなごう！</div>
+    <div id="prog-dots"></div>
+  </div>
+
+  <!-- 中間正解メッセージ -->
+  <div id="step-msg">
+    <div class="sm-stars"  id="sm-stars">⭐</div>
+    <div class="sm-praise" id="sm-praise">せいかい！</div>
+    <div class="sm-sub"    id="sm-sub">よくできました！</div>
+  </div>
+
+  <!-- ゲームクリア -->
+  <div id="final-end">
+    <div class="end-box">
+      <div class="e-stars">🌟🌟🌟🌟🌟</div>
+      <div class="e-title">ぜんぶできたよ！</div>
+      <div class="e-sub">すごい！よくがんばりました！</div>
+      <button class="e-btn" onclick="resetAll()">もう一度はじめから</button>
+    </div>
+  </div>
+
+  <script>
+    /* ================================================================
+       定数
+    ================================================================ */
+    const TRIALS_PER_LEVEL = 3;
+    const MIN_MAX          = 5;
+    const MAX_MAX          = 10;
+    const STEP_FREQS       = [523, 659, 784];  // C5, E5, G5
+
+    /* ================================================================
+       ゲーム進行状態
+    ================================================================ */
+    let currentMax = MIN_MAX;  // 現在の最大数字（5〜10）
+    let trialsDone = 0;        // 現レベルで完了した試行数（0〜3）
+    let autoTimer  = null;
+
+    /* ================================================================
+       1試行の状態
+    ================================================================ */
+    const canvas = document.getElementById('canvas');
+    const ctx    = canvas.getContext('2d');
+    const layer  = document.getElementById('circles-layer');
+
+    let circles     = [];
+    let currentFrom = 1;
+    let drawing     = false;
+    let currentPath = [];
+    let savedPaths  = [];
+    let lastHit     = null;
+
+    /* ================================================================
+       円サイズ（数字の多さに合わせてスケーリング）
+    ================================================================ */
+    function circleSize(n) {
+      if (n <= 5) return { w: 110, r: 55, hit: 62, font: 46, bw: 7 };
+      if (n <= 7) return { w:  98, r: 49, hit: 56, font: 42, bw: 6 };
+      return             { w:  88, r: 44, hit: 51, font: 38, bw: 5 };
+    }
+
+    /* ================================================================
+       ランダム配置生成
+    ================================================================ */
+    function progressBottom() {
+      // 進捗バーの実際の下端を取得して余白を加える
+      const el = document.getElementById('progress');
+      return Math.ceil(el.getBoundingClientRect().bottom) + 28;
+    }
+
+    function randomPositions(n, R) {
+      const W    = canvas.width;
+      const H    = canvas.height;
+      const MX   = R.r + 30;
+      const MT   = Math.max(progressBottom(), R.r + 30);
+      const MB   = Math.max(110, R.r + 30);
+      const MIND = R.r * 2 + 70;
+
+      const pts = [];
+      for (let i = 0; i < n; i++) {
+        let cx, cy, ok, tries = 0;
+        do {
+          cx = MX + Math.random() * (W - 2 * MX);
+          cy = MT + Math.random() * (H - MT - MB);
+          ok = pts.every(p => Math.hypot(cx - p.x, cy - p.y) >= MIND);
+          tries++;
+        } while (!ok && tries < 800);
+        pts.push({ x: cx, y: cy });
+      }
+      return pts;
+    }
+
+    /* ================================================================
+       初期化
+    ================================================================ */
+    function resizeCanvas() {
+      canvas.width  = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+
+    function buildCircles(positions, R) {
+      layer.innerHTML = '';
+      circles = positions.map((pos, i) => {
+        const num = i + 1;
+        const el  = document.createElement('div');
+        el.className = 'num-circle' + (num === 1 ? ' active' : '');
+        el.style.cssText = [
+          `left:${pos.x}px`, `top:${pos.y}px`,
+          `width:${R.w}px`, `height:${R.w}px`,
+          `font-size:${R.font}px`,
+          `border-width:${R.bw}px`,
+        ].join(';');
+        el.textContent = num;
+        layer.appendChild(el);
+        return { num, x: pos.x, y: pos.y, hit: R.hit, el };
+      });
+    }
+
+    /* ================================================================
+       進捗UI
+    ================================================================ */
+    function updateProgressUI() {
+      document.getElementById('prog-title').textContent =
+        `１〜${currentMax}　じゅんばんに つなごう！`;
+
+      const dotsEl = document.getElementById('prog-dots');
+      dotsEl.innerHTML = '';
+      for (let i = 0; i < TRIALS_PER_LEVEL; i++) {
+        const d = document.createElement('span');
+        d.className = 'pdot' + (i < trialsDone ? ' done' : '');
+        dotsEl.appendChild(d);
+      }
+    }
+
+    /* ================================================================
+       試行スタート
+    ================================================================ */
+    function startTrial() {
+      if (autoTimer) { clearTimeout(autoTimer); autoTimer = null; }
+
+      drawing     = false;
+      currentFrom = 1;
+      currentPath = [];
+      savedPaths  = [];
+      lastHit     = null;
+
+      const R   = circleSize(currentMax);
+      const pos = randomPositions(currentMax, R);
+      buildCircles(pos, R);
+      updateProgressUI();
+      render();
+    }
+
+    /* ================================================================
+       描画
+    ================================================================ */
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.lineCap  = 'round';
+      ctx.lineJoin = 'round';
+
+      ctx.lineWidth   = 9;
+      ctx.strokeStyle = '#5b9bd5';
+      savedPaths.forEach(pts => {
+        if (pts.length < 2) return;
+        ctx.beginPath();
+        pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+        ctx.stroke();
+      });
+
+      if (currentPath.length >= 2) {
+        ctx.strokeStyle = '#ff6d3a';
+        ctx.lineWidth   = 9;
+        ctx.beginPath();
+        currentPath.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+        ctx.stroke();
+      }
+    }
+
+    /* ================================================================
+       ヒット判定
+    ================================================================ */
+    function hitCircle(x, y, excludeNum) {
+      for (const c of circles) {
+        if (c.num === excludeNum) continue;
+        if (Math.hypot(x - c.x, y - c.y) <= c.hit) return c;
+      }
+      return null;
+    }
+
+    function onStart(x, y) {
+      const start = circles.find(c => c.num === currentFrom);
+      if (!start) return;
+      if (Math.hypot(x - start.x, y - start.y) > start.hit) return;
+
+      drawing     = true;
+      lastHit     = currentFrom;
+      currentPath = [{ x: start.x, y: start.y }];
+      render();
+    }
+
+    function onMove(x, y) {
+      if (!drawing) return;
+      currentPath.push({ x, y });
+
+      const hit = hitCircle(x, y, currentFrom);
+      if (hit && hit.num !== lastHit) {
+        lastHit = hit.num;
+
+        if (hit.num === currentFrom + 1) {
+          // ---- 正解 ----
+          savedPaths.push([...currentPath, { x: hit.x, y: hit.y }]);
+
+          const prevEl = circles.find(c => c.num === currentFrom).el;
+          prevEl.className = 'num-circle completed';
+          popCircle(prevEl);
+
+          const stepIndex = currentFrom - 1;
+          currentFrom = hit.num;
+          currentPath = [{ x: hit.x, y: hit.y }];
+
+          if (currentFrom === currentMax) {
+            // ---- 全部繋いだ ----
+            hit.el.className = 'num-circle completed';
+            popCircle(hit.el);
+            drawing = false;
+            currentPath = [];
+            render();
+            onLevelComplete();
+            return;
+          }
+
+          hit.el.className = 'num-circle active';
+          soundStep(stepIndex);
+
+        } else {
+          // ---- 不正解 ----
+          drawing     = false;
+          currentPath = [];
+          lastHit     = null;
+        }
+      }
+
+      if (!hit) lastHit = null;
+      render();
+    }
+
+    function onEnd() {
+      if (!drawing) return;
+      drawing     = false;
+      currentPath = [];
+      lastHit     = null;
+      render();
+    }
+
+    /* ================================================================
+       全完成時の処理
+    ================================================================ */
+    function onLevelComplete() {
+      trialsDone++;
+      updateProgressUI();  // ドットをすぐ更新
+
+      flashScreen();
+      soundComplete();
+      spawnConfetti();
+
+      const isLevelUp  = trialsDone >= TRIALS_PER_LEVEL;
+      const isFinalEnd = isLevelUp && currentMax >= MAX_MAX;
+
+      // メッセージ内容を決定
+      let stars, praise, sub;
+      if (isFinalEnd) {
+        stars = '🌟🌟🌟🌟🌟'; praise = 'ぜんぶできたよ！'; sub = 'すごい！よくがんばりました！';
+      } else if (isLevelUp) {
+        stars = '⭐⭐⭐'; praise = 'せいかい！'; sub = `つぎは １〜${currentMax + 1} にちょうせん！`;
+      } else {
+        stars = '⭐'; praise = 'せいかい！'; sub = 'よくできました！';
+      }
+
+      // 700ms 後にメッセージ表示
+      autoTimer = setTimeout(() => {
+        showStepMsg(stars, praise, sub);
+
+        if (isFinalEnd) {
+          // クリア画面は 2s 後に重ねて表示
+          autoTimer = setTimeout(() => {
+            hideStepMsg();
+            spawnConfetti();
+            document.getElementById('final-end').classList.add('show');
+          }, 2000);
+        } else {
+          // 2s 後に次の試行へ
+          const wait = isLevelUp ? 2400 : 2000;
+          autoTimer = setTimeout(() => {
+            hideStepMsg();
+            if (isLevelUp) {
+              currentMax++;
+              trialsDone = 0;
+            }
+            startTrial();
+          }, wait);
+        }
+      }, 700);
+    }
+
+    /* ================================================================
+       メッセージ表示 / 非表示
+    ================================================================ */
+    function showStepMsg(stars, praise, sub) {
+      document.getElementById('sm-stars').textContent  = stars;
+      document.getElementById('sm-praise').textContent = praise;
+      document.getElementById('sm-sub').textContent    = sub;
+      const el = document.getElementById('step-msg');
+      el.style.display = 'block';
+      requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('show')));
+    }
+
+    function hideStepMsg() {
+      const el = document.getElementById('step-msg');
+      el.classList.remove('show');
+      setTimeout(() => { el.style.display = 'none'; }, 300);
+    }
+
+    /* ================================================================
+       ビジュアルエフェクト
+    ================================================================ */
+    function popCircle(el) {
+      el.classList.remove('pop');
+      void el.offsetWidth;
+      el.classList.add('pop');
+      el.addEventListener('animationend', () => el.classList.remove('pop'), { once: true });
+    }
+
+    function flashScreen() {
+      const fl = document.getElementById('flash');
+      fl.classList.add('on');
+      setTimeout(() => fl.classList.remove('on'), 180);
+    }
+
+    function spawnConfetti() {
+      const container = document.getElementById('particles');
+      container.innerHTML = '';
+      const colors = ['#ff6d3a','#5b9bd5','#ffd700','#4caf50','#ff4081','#9c27b0','#ff9800'];
+
+      circles.forEach(c => {
+        for (let i = 0; i < 12; i++) {
+          const el    = document.createElement('div');
+          el.className = 'confetti';
+          const angle = Math.random() * 360;
+          const dist  = 80 + Math.random() * 130;
+          const dx    = Math.cos(angle * Math.PI / 180) * dist;
+          const dy    = Math.sin(angle * Math.PI / 180) * dist;
+          const size  = 7 + Math.random() * 9;
+          const dur   = (0.8 + Math.random() * 0.7).toFixed(2);
+          const rot   = (Math.random() * 540 - 270).toFixed(0);
+
+          el.style.cssText = [
+            `left:${c.x}px`, `top:${c.y}px`,
+            `width:${size}px`, `height:${size}px`,
+            `background:${colors[Math.floor(Math.random() * colors.length)]}`,
+            `--dx:${dx.toFixed(1)}px`, `--dy:${dy.toFixed(1)}px`,
+            `--rot:${rot}deg`, `--dur:${dur}s`,
+            `transform:translate(-50%,-50%)`,
+          ].join(';');
+          container.appendChild(el);
+        }
+      });
+
+      setTimeout(() => { container.innerHTML = ''; }, 1800);
+    }
+
+    /* ================================================================
+       音声
+    ================================================================ */
+    let audioCtx = null;
+
+    function getAudioCtx() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    }
+
+    function playTone(freq, delay, dur, vol = 0.28, type = 'sine') {
+      const ac  = getAudioCtx();
+      const osc = ac.createOscillator();
+      const g   = ac.createGain();
+      osc.connect(g); g.connect(ac.destination);
+      osc.type = type;
+      osc.frequency.value = freq;
+      const t = ac.currentTime + delay;
+      g.gain.setValueAtTime(vol, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      osc.start(t); osc.stop(t + dur + 0.02);
+    }
+
+    function soundStep(stepIndex) {
+      const f = STEP_FREQS[stepIndex % STEP_FREQS.length];
+      playTone(f,     0,    0.30, 0.30);
+      playTone(f * 2, 0,    0.15, 0.10);
+      playTone(f * 3, 0.05, 0.10, 0.05);
+    }
+
+    function soundComplete() {
+      [523, 659, 784, 1047].forEach((f, i) => playTone(f, i * 0.12, 0.35, 0.28));
+      [1047, 1318, 1568].forEach(f => playTone(f, 0.50, 0.70, 0.22));
+      [2093, 2637].forEach((f, i) => playTone(f, 0.55 + i * 0.08, 0.40, 0.10));
+    }
+
+    /* ================================================================
+       タッチイベント
+    ================================================================ */
+    function pos(touch) {
+      const r = canvas.getBoundingClientRect();
+      return [touch.clientX - r.left, touch.clientY - r.top];
+    }
+
+    canvas.addEventListener('touchstart', e => {
+      e.preventDefault();
+      const [x, y] = pos(e.touches[0]);
+      onStart(x, y);
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', e => {
+      e.preventDefault();
+      const [x, y] = pos(e.touches[0]);
+      onMove(x, y);
+    }, { passive: false });
+
+    canvas.addEventListener('touchend',    e => { e.preventDefault(); onEnd(); }, { passive: false });
+    canvas.addEventListener('touchcancel', e => { e.preventDefault(); onEnd(); }, { passive: false });
+
+    /* ================================================================
+       マウス（PC確認用）
+    ================================================================ */
+    let mouseDown = false;
+    canvas.addEventListener('mousedown', e => { mouseDown = true;  onStart(e.offsetX, e.offsetY); });
+    canvas.addEventListener('mousemove', e => { if (mouseDown) onMove(e.offsetX, e.offsetY); });
+    canvas.addEventListener('mouseup',   () => { mouseDown = false; onEnd(); });
+
+    /* ================================================================
+       リセット（最初から）
+    ================================================================ */
+    function resetAll() {
+      if (autoTimer) { clearTimeout(autoTimer); autoTimer = null; }
+
+      currentMax  = MIN_MAX;
+      trialsDone  = 0;
+      drawing     = false;
+      currentFrom = 1;
+      currentPath = [];
+      savedPaths  = [];
+      lastHit     = null;
+
+      hideStepMsg();
+      document.getElementById('final-end').classList.remove('show');
+      document.getElementById('particles').innerHTML = '';
+
+      startTrial();
+    }
+
+    /* ================================================================
+       リサイズ
+    ================================================================ */
+    window.addEventListener('resize', () => {
+      resizeCanvas();
+      savedPaths  = [];
+      currentPath = [];
+      const R   = circleSize(currentMax);
+      const pos = randomPositions(currentMax, R);
+      buildCircles(pos, R);
+      render();
+    });
+
+    /* ---- 起動 ---- */
+    resizeCanvas();
+    startTrial();
+  </script>
+</body>
+</html>
