@@ -594,23 +594,54 @@
     ================================================================ */
     let audioCtx = null;
 
-    function getAudioCtx() {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    // iOS は touchstart で無音バッファを再生しないと AudioContext がロックされたまま
+    function unlockAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
       if (audioCtx.state === 'suspended') audioCtx.resume();
+      // 無音バッファを1サンプル再生してiOSのロックを解除
+      const buf = audioCtx.createBuffer(1, 1, audioCtx.sampleRate);
+      const src = audioCtx.createBufferSource();
+      src.buffer = buf;
+      src.connect(audioCtx.destination);
+      src.start(0);
+    }
+
+    // 最初のタッチで一度だけアンロック
+    document.addEventListener('touchstart', function onFirstTouch() {
+      unlockAudio();
+      document.removeEventListener('touchstart', onFirstTouch);
+    }, { once: true, passive: true });
+
+    function getAudioCtx() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
       return audioCtx;
     }
 
+    // resume() は非同期なので、running 状態を確認してから音を鳴らす
     function playTone(freq, delay, dur, vol = 0.28, type = 'sine') {
-      const ac  = getAudioCtx();
-      const osc = ac.createOscillator();
-      const g   = ac.createGain();
-      osc.connect(g); g.connect(ac.destination);
-      osc.type = type;
-      osc.frequency.value = freq;
-      const t = ac.currentTime + delay;
-      g.gain.setValueAtTime(vol, t);
-      g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-      osc.start(t); osc.stop(t + dur + 0.02);
+      const ac = getAudioCtx();
+
+      const schedule = () => {
+        const osc = ac.createOscillator();
+        const g   = ac.createGain();
+        osc.connect(g); g.connect(ac.destination);
+        osc.type = type;
+        osc.frequency.value = freq;
+        const t = ac.currentTime + delay;
+        g.gain.setValueAtTime(vol, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+        osc.start(t); osc.stop(t + dur + 0.02);
+      };
+
+      if (ac.state === 'running') {
+        schedule();
+      } else {
+        ac.resume().then(schedule);
+      }
     }
 
     function soundStep(stepIndex) {
