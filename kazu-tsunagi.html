@@ -409,6 +409,7 @@
     }
 
     function onStart(x, y) {
+      initAudio();  // touchstart / mousedown の中なのでジェスチャー制約をクリア
       const start = circles.find(c => c.num === currentFrom);
       if (!start) return;
       if (Math.hypot(x - start.x, y - start.y) > start.hit) return;
@@ -594,53 +595,46 @@
     ================================================================ */
     let audioCtx = null;
 
-    // iOS は touchstart で無音バッファを再生しないと AudioContext がロックされたまま
-    function unlockAudio() {
+    // onStart() 内（touchstart / mousedown の直接コールバック）から呼ぶことで
+    // iOS・Mac 両方でユーザージェスチャー制約をクリアする
+    function initAudio() {
       if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       }
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-      // 無音バッファを1サンプル再生してiOSのロックを解除
-      const buf = audioCtx.createBuffer(1, 1, audioCtx.sampleRate);
-      const src = audioCtx.createBufferSource();
-      src.buffer = buf;
-      src.connect(audioCtx.destination);
-      src.start(0);
-    }
-
-    // 最初のタッチで一度だけアンロック
-    document.addEventListener('touchstart', function onFirstTouch() {
-      unlockAudio();
-      document.removeEventListener('touchstart', onFirstTouch);
-    }, { once: true, passive: true });
-
-    function getAudioCtx() {
-      if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+        // iOS: ユーザージェスチャー内で無音バッファを start() することでロック解除
+        try {
+          const buf = audioCtx.createBuffer(1, 1, audioCtx.sampleRate);
+          const src = audioCtx.createBufferSource();
+          src.buffer = buf;
+          src.connect(audioCtx.destination);
+          src.start(0);
+        } catch (e) {}
       }
-      return audioCtx;
     }
 
-    // resume() は非同期なので、running 状態を確認してから音を鳴らす
     function playTone(freq, delay, dur, vol = 0.28, type = 'sine') {
-      const ac = getAudioCtx();
+      if (!audioCtx) return;
 
       const schedule = () => {
-        const osc = ac.createOscillator();
-        const g   = ac.createGain();
-        osc.connect(g); g.connect(ac.destination);
-        osc.type = type;
-        osc.frequency.value = freq;
-        const t = ac.currentTime + delay;
-        g.gain.setValueAtTime(vol, t);
-        g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-        osc.start(t); osc.stop(t + dur + 0.02);
+        try {
+          const osc = audioCtx.createOscillator();
+          const g   = audioCtx.createGain();
+          osc.connect(g); g.connect(audioCtx.destination);
+          osc.type = type;
+          osc.frequency.value = freq;
+          const t = audioCtx.currentTime + delay;
+          g.gain.setValueAtTime(vol, t);
+          g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+          osc.start(t); osc.stop(t + dur + 0.02);
+        } catch (e) {}
       };
 
-      if (ac.state === 'running') {
+      if (audioCtx.state === 'running') {
         schedule();
       } else {
-        ac.resume().then(schedule);
+        audioCtx.resume().then(schedule).catch(() => {});
       }
     }
 
