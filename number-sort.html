@@ -19,12 +19,20 @@ body{background:#1e3d6e;font-family:'Hiragino Kaku Gothic Pro',sans-serif;
 /* ===== 設定画面 ===== */
 #setup{position:fixed;inset:0;background:#1e3d6e;z-index:500;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:24px;padding:max(24px,env(safe-area-inset-top)) 20px 32px}
+  gap:24px;padding:max(24px,env(safe-area-inset-top)) 20px 32px;overflow-y:auto}
 #setup h1{font-size:22px;letter-spacing:.08em;text-align:center}
 .hint-box{background:rgba(255,255,255,.1);border-radius:12px;
   padding:12px 18px;font-size:14px;line-height:2;
   width:100%;max-width:480px;text-align:center}
 .hint-box b{color:#FFD700}
+.range-wrap{width:100%;max-width:480px;text-align:center}
+.range-lbl{font-size:15px;margin-bottom:12px;color:rgba(255,255,255,.9);font-weight:bold}
+.range-btns{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.range-btn{background:rgba(255,255,255,.15);color:#fff;border:2px solid rgba(255,255,255,.3);
+  padding:10px 16px;font-size:17px;font-weight:bold;border-radius:10px;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;transition:.15s}
+.range-btn.selected{background:#4CAF50;border-color:#4CAF50;box-shadow:0 3px 12px rgba(76,175,80,.4)}
+.range-btn:active{transform:scale(.96)}
 .movie-wrap{display:flex;flex-direction:column;align-items:center;gap:10px}
 .mv-slot{width:120px;height:120px;background:rgba(0,0,0,.3);
   border:3px dashed rgba(255,255,255,.35);border-radius:14px;cursor:pointer;
@@ -69,14 +77,23 @@ h1{font-size:22px;letter-spacing:.08em;text-align:center}
 .dclone{position:fixed;pointer-events:none;z-index:9999;border-radius:10px;
   box-shadow:0 8px 26px rgba(0,0,0,.5);transform:scale(1.12);background:#FFD700;
   display:flex;align-items:center;justify-content:center;font-weight:bold;color:#333}
-#answer-btn{background:#4CAF50;color:#fff;border:none;padding:15px 52px;
+#answer-btn{background:#2e6e32;color:#fff;border:none;padding:15px 52px;
   font-size:21px;font-weight:bold;border-radius:14px;cursor:pointer;
-  letter-spacing:.08em;box-shadow:0 4px 16px rgba(76,175,80,.4);
-  -webkit-tap-highlight-color:transparent;transition:.2s}
+  letter-spacing:.08em;box-shadow:0 4px 16px rgba(76,175,80,.25);
+  -webkit-tap-highlight-color:transparent;transition:.2s;margin-top:24px}
+#answer-btn:hover{background:#4CAF50;box-shadow:0 4px 16px rgba(76,175,80,.4)}
 #answer-btn:active{transform:scale(.97)}
 #answer-btn:disabled{background:#555;box-shadow:none;opacity:.5;cursor:not-allowed}
+#end-btns{display:none;gap:16px;justify-content:center;flex-wrap:wrap;margin-top:24px}
+#retry-btn,#settings-btn{border:none;padding:15px 36px;font-size:19px;font-weight:bold;
+  border-radius:14px;cursor:pointer;letter-spacing:.06em;
+  -webkit-tap-highlight-color:transparent;transition:.2s}
+#retry-btn{background:#FFF3CD;color:#5C4A1E;box-shadow:0 4px 16px rgba(255,243,205,.4)}
+#retry-btn:active{transform:scale(.97)}
+#settings-btn{background:rgba(255,255,255,.18);color:#fff;border:2px solid rgba(255,255,255,.4)}
+#settings-btn:active{transform:scale(.97)}
 #result{font-size:19px;font-weight:bold;min-height:28px;text-align:center;letter-spacing:.04em}
-#result.ok{color:#4CAF50}
+#result.ok{color:#FFE082}
 #result.ng{color:#ff6b6b}
 
 /* ===== ムービー ===== */
@@ -103,8 +120,19 @@ h1{font-size:22px;letter-spacing:.08em;text-align:center}
 <div id="setup">
   <h1>🔢 数字ならべゲーム</h1>
   <div class="hint-box">
-    <b>① ご褒美ムービーを選ぶ</b><br>
-    <b>② ゲームスタート！</b>
+    <b>① ならべる数字の上限を選ぶ</b><br>
+    <b>② ご褒美ムービーを選ぶ</b><br>
+    <b>③ ゲームスタート！</b>
+  </div>
+  <div class="range-wrap">
+    <div class="range-lbl">ならべる数字の上限</div>
+    <div class="range-btns">
+      <button class="range-btn selected" data-max="10">1〜10</button>
+      <button class="range-btn" data-max="20">1〜20</button>
+      <button class="range-btn" data-max="30">1〜30</button>
+      <button class="range-btn" data-max="40">1〜40</button>
+      <button class="range-btn" data-max="50">1〜50</button>
+    </div>
   </div>
   <div id="restore-banner" class="restore-banner" style="display:none">
     ✅ 前回のムービーを読み込みました
@@ -133,6 +161,10 @@ h1{font-size:22px;letter-spacing:.08em;text-align:center}
   <div class="row-section new-section" id="row-section-4" style="display:none"><div class="nrow" id="row-4"></div></div>
 </div>
 <button id="answer-btn">解答する ✓</button>
+<div id="end-btns">
+  <button id="retry-btn">もういちど ↩</button>
+  <button id="settings-btn">⚙ 設定へ戻る</button>
+</div>
 <div id="result"></div>
 
 <!-- ムービー関連 -->
@@ -145,19 +177,22 @@ h1{font-size:22px;letter-spacing:.08em;text-align:center}
 
 <script>
 'use strict';
-var STAGES=[
+var ALL_STAGES=[
   [1,2,3,4,5,6,7,8,9,10],
   [11,12,13,14,15,16,17,18,19,20],
   [21,22,23,24,25,26,27,28,29,30],
   [31,32,33,34,35,36,37,38,39,40],
   [41,42,43,44,45,46,47,48,49,50]
 ];
+var selectedMax=10;
+var activeStages=ALL_STAGES.slice(0,1);
 var stageIdx=0;
 var order=[];
 var activeRow=null;
 var drag={val:null,fromIdx:-1,cl:null,ox:0,oy:0,w:0,h:0};
 var solved=false;
 var S_MOVIE=null,HAS_MOVIE=false,movieObjectURL=null;
+var rewardTimeout=null;
 
 /* ===== IndexedDB ===== */
 var DB=null;
@@ -195,6 +230,16 @@ function checkReady(){
   document.getElementById('start-btn').disabled=!(skip||S_MOVIE!==null);
 }
 
+/* 範囲選択ボタン */
+document.querySelectorAll('.range-btn').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    selectedMax=parseInt(this.dataset.max);
+    document.querySelectorAll('.range-btn').forEach(function(b){b.classList.remove('selected');});
+    this.classList.add('selected');
+    try{localStorage.setItem('ns_maxnum',selectedMax);}catch(e){}
+  });
+});
+
 document.getElementById('fi-movie').addEventListener('change',function(){
   var file=this.files&&this.files[0];if(!file)return;
   S_MOVIE=file;
@@ -218,6 +263,8 @@ document.getElementById('skip-video').addEventListener('change',function(){
 
 document.getElementById('start-btn').addEventListener('click',function(){
   HAS_MOVIE=!document.getElementById('skip-video').checked&&S_MOVIE!==null;
+  activeStages=ALL_STAGES.slice(0,selectedMax/10);
+  resetUI();
   document.getElementById('setup').style.display='none';
   startStage(0);
 });
@@ -235,6 +282,15 @@ loadVideoFromDB(function(blob){
   }
   checkReady();
 });
+
+/* 範囲選択を復元 */
+(function(){
+  var saved=parseInt(localStorage.getItem('ns_maxnum')||'10');
+  if([10,20,30,40,50].indexOf(saved)!==-1)selectedMax=saved;
+  document.querySelectorAll('.range-btn').forEach(function(btn){
+    btn.classList.toggle('selected',parseInt(btn.dataset.max)===selectedMax);
+  });
+})();
 
 /* ===== ゲームロジック ===== */
 function shuffle(a){
@@ -322,7 +378,7 @@ function lockStage(idx){
 }
 function startStage(idx){
   stageIdx=idx;solved=false;
-  var nums=STAGES[idx];
+  var nums=activeStages[idx];
   order=shuffle(nums.slice());
   activeRow=document.getElementById('row-'+idx);
   if(idx>0){
@@ -338,9 +394,37 @@ function startStage(idx){
   render();
 }
 
+function showEndButtons(){
+  document.getElementById('answer-btn').style.display='none';
+  document.getElementById('end-btns').style.display='flex';
+}
+
+function hideEndButtons(){
+  document.getElementById('answer-btn').style.display='';
+  document.getElementById('end-btns').style.display='none';
+}
+
+function resetUI(){
+  if(rewardTimeout){clearTimeout(rewardTimeout);rewardTimeout=null;}
+  document.getElementById('reward-tap').style.display='none';
+  for(var i=1;i<5;i++){
+    var sec=document.getElementById('row-section-'+i);
+    sec.style.display='none';
+    sec.classList.remove('visible','done-section');
+    document.getElementById('row-'+i).innerHTML='';
+  }
+  document.getElementById('row-section-0').classList.remove('done-section');
+  document.getElementById('row-0').innerHTML='';
+  stageIdx=0;solved=false;
+  document.getElementById('result').textContent='';
+  document.getElementById('result').className='';
+  hideEndButtons();
+  document.getElementById('answer-btn').disabled=false;
+}
+
 document.getElementById('answer-btn').addEventListener('click',function(){
   if(drag.val)return;
-  var nums=STAGES[stageIdx];
+  var nums=activeStages[stageIdx];
   var correct=true;
   for(var i=0;i<order.length;i++){if(order[i]!==nums[i]){correct=false;break;}}
   var res=document.getElementById('result');
@@ -348,17 +432,19 @@ document.getElementById('answer-btn').addEventListener('click',function(){
     solved=true;
     document.getElementById('answer-btn').disabled=true;
     lockStage(stageIdx);
-    if(stageIdx<STAGES.length-1){
+    if(stageIdx<activeStages.length-1){
       soundCorrect();
       res.textContent='🎉 '+nums[0]+'〜'+nums[9]+' クリア！ 次のチャレンジへ…';
       res.className='ok';
       setTimeout(function(){startStage(stageIdx+1);},4000);
     }else{
       soundAllClear();
-      res.textContent='🎊 せいかい！ 1〜50 全部クリア！おめでとう！';
+      res.textContent='🎊 せいかい！ 1〜'+selectedMax+' 全部クリア！おめでとう！';
       res.className='ok';
+      showEndButtons();
       if(HAS_MOVIE){
-        setTimeout(function(){
+        rewardTimeout=setTimeout(function(){
+          rewardTimeout=null;
           document.getElementById('reward-tap').style.display='flex';
         },3200);
       }
@@ -368,6 +454,16 @@ document.getElementById('answer-btn').addEventListener('click',function(){
     res.className='ng';
     soundWrong();
   }
+});
+
+document.getElementById('retry-btn').addEventListener('click',function(){
+  resetUI();
+  startStage(0);
+});
+
+document.getElementById('settings-btn').addEventListener('click',function(){
+  resetUI();
+  document.getElementById('setup').style.display='flex';
 });
 
 /* ムービー再生 */
@@ -382,18 +478,9 @@ document.getElementById('watch-mv-btn').addEventListener('click',function(){
   v.onended=endReward;
 });
 document.getElementById('skip-mv').addEventListener('click',endReward);
+
 function resetGame(){
-  for(var i=1;i<STAGES.length;i++){
-    var sec=document.getElementById('row-section-'+i);
-    sec.style.display='none';
-    sec.classList.remove('visible','done-section');
-    document.getElementById('row-'+i).innerHTML='';
-  }
-  document.getElementById('row-section-0').classList.remove('done-section');
-  stageIdx=0;solved=false;
-  document.getElementById('result').textContent='';
-  document.getElementById('result').className='';
-  document.getElementById('answer-btn').disabled=false;
+  resetUI();
   startStage(0);
 }
 function endReward(){
