@@ -27,17 +27,19 @@
     width: 100%;
     height: 100%;
     display: flex;
-    align-items: center;
+    align-items: stretch;
     justify-content: center;
-    gap: 4vw;
-    padding: 4vh 4vw;
+    gap: 2.5vw;
+    padding: 2.2vh 2.2vw;
   }
 
   /* ---------- 盤面エリア ---------- */
   #board-wrap {
     position: relative;
-    flex: 0 0 auto;
-    padding: 54px;
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 100%;
+    padding: 26px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -45,8 +47,6 @@
 
   #grid {
     position: relative;
-    width: min(64vh, 60vw);
-    height: min(64vh, 60vw);
     display: grid;
     grid-template-columns: repeat(5, 1fr);
     grid-template-rows: repeat(5, 1fr);
@@ -131,10 +131,12 @@
   /* ---------- 右パネル ---------- */
   #panel {
     flex: 0 0 auto;
-    width: min(34vw, 460px);
+    width: clamp(300px, 27vw, 400px);
+    height: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: 22px;
   }
 
@@ -398,6 +400,17 @@
     return { x: t.offsetLeft + t.offsetWidth / 2, y: t.offsetTop + t.offsetHeight / 2 };
   }
 
+  function layoutGridSize() {
+    const cs = getComputedStyle(boardWrap);
+    const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+    const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+    const availW = boardWrap.clientWidth - padX;
+    const availH = boardWrap.clientHeight - padY;
+    const size = Math.max(200, Math.floor(Math.min(availW, availH)));
+    grid.style.width = size + 'px';
+    grid.style.height = size + 'px';
+  }
+
   function layoutCoinSize() {
     const t = tileAt(0, 0);
     const size = Math.round(t.offsetWidth * 0.68);
@@ -468,6 +481,7 @@
 
   function render() {
     const p = currentProblem();
+    layoutGridSize();
     layoutCoinSize();
     coin.classList.remove('correct-anim', 'wrong-anim');
     coin.style.visibility = 'visible';
@@ -656,8 +670,10 @@
 
   // ---------- リサイズ対応 ----------
   window.addEventListener('resize', () => {
+    layoutGridSize();
     layoutCoinSize();
     placeCoin(curRow, curCol, false);
+    if (chest.classList.contains('show')) placeChest(currentProblem().targetRow, currentProblem().targetCol);
     placeStartLabel(currentProblem());
   });
 
