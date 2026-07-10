@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="たからさがし">
+<title>たからさがし</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    width: 100dvw;
+    height: 100dvh;
+    overflow: hidden;
+    background: radial-gradient(circle at 30% 20%, #f1e8d6 0%, #e6d9bd 60%, #ddccaa 100%);
+    font-family: 'Hiragino Kaku Gothic Pro', 'Hiragino Sans', sans-serif;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+  }
+
+  #app {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4vw;
+    padding: 4vh 4vw;
+  }
+
+  /* ---------- 盤面エリア ---------- */
+  #board-wrap {
+    position: relative;
+    flex: 0 0 auto;
+    padding: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #grid {
+    position: relative;
+    width: min(64vh, 60vw);
+    height: min(64vh, 60vw);
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    grid-template-rows: repeat(5, 1fr);
+    gap: 1.6%;
+  }
+
+  .tile {
+    background: #92c99a;
+    border: 3px solid #3c3c3c;
+    border-radius: 16px;
+    box-shadow: inset 0 2px 4px rgba(255,255,255,0.35), 0 2px 3px rgba(0,0,0,0.08);
+  }
+
+  .tile.target-flash {
+    animation: target-pulse 0.9s ease-in-out;
+  }
+  @keyframes target-pulse {
+    0%, 100% { background: #92c99a; }
+    50%      { background: #ffd75e; }
+  }
+
+  #coin {
+    position: absolute;
+    top: 0; left: 0;
+    border-radius: 50%;
+    background: #5a6fc4;
+    border: 4px solid #2f3f8f;
+    box-shadow: 0 4px 8px rgba(40,50,100,0.35);
+    transform: translate(-50%, -50%);
+    cursor: grab;
+    touch-action: none;
+    z-index: 20;
+  }
+  #coin.dragging {
+    cursor: grabbing;
+    box-shadow: 0 8px 16px rgba(40,50,100,0.45);
+  }
+  #coin.snap-anim {
+    transition: left 0.18s ease-out, top 0.18s ease-out;
+  }
+  #coin.wrong-anim {
+    animation: shake 0.4s ease-in-out;
+  }
+  #coin.correct-anim {
+    animation: coin-vanish 0.4s ease-in forwards;
+  }
+  @keyframes shake {
+    0%, 100% { margin-left: 0; }
+    20%  { margin-left: -10px; }
+    40%  { margin-left: 9px; }
+    60%  { margin-left: -6px; }
+    80%  { margin-left: 5px; }
+  }
+  @keyframes coin-vanish {
+    0%   { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+    100% { transform: translate(-50%,-50%) scale(0.2); opacity: 0; }
+  }
+
+  #chest {
+    position: absolute;
+    top: 0; left: 0;
+    transform: translate(-50%, -50%) scale(0);
+    z-index: 20;
+    pointer-events: none;
+    transition: transform 0.45s cubic-bezier(.34, 1.7, .64, 1);
+  }
+  #chest svg { width: 100%; height: 100%; display: block; }
+  #chest.show {
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  #start-label {
+    position: absolute;
+    font-size: clamp(16px, 2.6vh, 24px);
+    font-weight: bold;
+    color: #4a63c0;
+    white-space: nowrap;
+    text-shadow: 0 1px 3px rgba(255,255,255,0.8);
+    pointer-events: none;
+  }
+
+  /* ---------- 右パネル ---------- */
+  #panel {
+    flex: 0 0 auto;
+    width: min(34vw, 460px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 22px;
+  }
+
+  #level-select {
+    display: flex;
+    gap: 10px;
+  }
+  .level-btn {
+    background: #fbf6ea;
+    border: 3px solid #3c3c3c;
+    border-radius: 12px;
+    padding: 8px 16px;
+    font-size: clamp(15px, 2.1vh, 19px);
+    font-weight: bold;
+    color: #2b2b2b;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    cursor: pointer;
+  }
+  .level-btn:active { transform: translateY(1px); }
+  .level-btn.active {
+    background: #3454c9;
+    color: #fff;
+    border-color: #1f2c7a;
+  }
+
+  #mondai-tab {
+    background: #fbf6ea;
+    border: 3px solid #3c3c3c;
+    border-radius: 14px;
+    padding: 10px 34px;
+    font-size: clamp(20px, 3vh, 28px);
+    font-weight: bold;
+    color: #3454c9;
+    box-shadow: 0 3px 5px rgba(0,0,0,0.12);
+  }
+
+  #problem-box {
+    background: rgba(255,255,255,0.35);
+    border-radius: 18px;
+    padding: 22px 20px;
+    width: 100%;
+    text-align: center;
+    line-height: 1.6;
+    font-size: clamp(19px, 3vh, 30px);
+    font-weight: bold;
+    color: #2b2b2b;
+  }
+  #problem-box ruby rt {
+    font-size: 0.42em;
+    color: #555;
+  }
+  #problem-box .num {
+    color: #c9502f;
+  }
+
+  #result-msg {
+    min-height: 1.6em;
+    font-size: clamp(20px, 3vh, 28px);
+    font-weight: bold;
+    text-align: center;
+  }
+  #result-msg.ok  { color: #2e8b3e; }
+  #result-msg.ng  { color: #c9502f; }
+
+  #answer-btn {
+    background: #fbf6ea;
+    border: 3px solid #3c3c3c;
+    border-radius: 14px;
+    padding: 14px 30px;
+    font-size: clamp(18px, 2.6vh, 24px);
+    font-weight: bold;
+    color: #2b2b2b;
+    box-shadow: 0 3px 5px rgba(0,0,0,0.12);
+    cursor: pointer;
+  }
+  #answer-btn:active { transform: translateY(1px); }
+  #answer-btn:disabled { opacity: 0.5; }
+
+  /* ---------- ナビ矢印 ---------- */
+  .nav-btn {
+    position: fixed;
+    right: max(18px, env(safe-area-inset-right));
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    background: #3c3c3c;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 30;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.25);
+  }
+  #nav-prev { top: max(18px, env(safe-area-inset-top)); }
+  #nav-next { bottom: max(18px, env(safe-area-inset-bottom)); }
+  .nav-btn svg { width: 18px; height: 18px; }
+  .nav-btn:active { transform: scale(0.92); }
+
+  /* ---------- 全問正解フラッシュ ---------- */
+  #flash {
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(circle at center, rgba(255,220,50,0.45) 0%, rgba(255,220,50,0) 70%);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 15;
+  }
+  #flash.show { animation: flash-anim 0.7s ease-out; }
+  @keyframes flash-anim {
+    0%   { opacity: 0; }
+    30%  { opacity: 1; }
+    100% { opacity: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="board-wrap">
+    <div id="grid"></div>
+    <div id="start-label">スタート</div>
+  </div>
+
+  <div id="panel">
+    <div id="level-select">
+      <div class="level-btn" data-level="1">レベル１</div>
+      <div class="level-btn" data-level="2">レベル２</div>
+      <div class="level-btn" data-level="3">レベル３</div>
+    </div>
+    <div id="mondai-tab">もんだい</div>
+    <div id="problem-box"></div>
+    <div id="result-msg"></div>
+    <button id="answer-btn">答え合わせ</button>
+  </div>
+</div>
+
+<div id="nav-prev" class="nav-btn">
+  <svg viewBox="0 0 24 24"><polygon points="12,6 20,18 4,18" fill="white"/></svg>
+</div>
+<div id="nav-next" class="nav-btn">
+  <svg viewBox="0 0 24 24"><polygon points="12,18 4,6 20,6" fill="white"/></svg>
+</div>
+
+<div id="flash"></div>
+
+<script>
+(() => {
+  const N = 5; // 5x5マス
+  const grid = document.getElementById('grid');
+  const boardWrap = document.getElementById('board-wrap');
+  const coin = document.createElement('div');
+  coin.id = 'coin';
+  const chest = document.createElement('div');
+  chest.id = 'chest';
+  chest.innerHTML = `
+    <svg viewBox="0 0 64 64">
+      <ellipse cx="32" cy="56" rx="22" ry="4" fill="rgba(0,0,0,0.15)"/>
+      <rect x="8" y="30" width="48" height="24" rx="4" fill="#9a6a34" stroke="#5c3a1a" stroke-width="2.5"/>
+      <path d="M6 30 Q32 10 58 30 L58 22 Q32 4 6 22 Z" fill="#b97f3f" stroke="#5c3a1a" stroke-width="2.5" stroke-linejoin="round"/>
+      <rect x="27" y="10" width="10" height="46" fill="#e8b23d" stroke="#5c3a1a" stroke-width="1.5"/>
+      <circle cx="32" cy="32" r="6" fill="#ffd75e" stroke="#8a6116" stroke-width="2"/>
+      <circle cx="18" cy="16" r="3" fill="#ff5a5a"/>
+      <circle cx="32" cy="12" r="3.4" fill="#4fd0ff"/>
+      <circle cx="46" cy="16" r="3" fill="#5adf6a"/>
+    </svg>`;
+  const startLabel = document.getElementById('start-label');
+  const problemBox = document.getElementById('problem-box');
+  const resultMsg = document.getElementById('result-msg');
+  const answerBtn = document.getElementById('answer-btn');
+  const flashEl = document.getElementById('flash');
+
+  const DIR_INFO = {
+    up:    { kanji: '上', kana: 'うえ' },
+    down:  { kanji: '下', kana: 'した' },
+    left:  { kanji: '左', kana: 'ひだり' },
+    right: { kanji: '右', kana: 'みぎ' }
+  };
+
+  const tiles = [];
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const t = document.createElement('div');
+      t.className = 'tile';
+      t.dataset.row = r;
+      t.dataset.col = c;
+      grid.appendChild(t);
+      tiles.push(t);
+    }
+  }
+  grid.appendChild(coin);
+  grid.appendChild(chest);
+
+  function tileAt(r, c) { return tiles[r * N + c]; }
+
+  // ---------- 問題生成 ----------
+  let history = [];
+  let histIndex = -1;
+
+  const OPPOSITE = { up: 'down', down: 'up', left: 'right', right: 'left' };
+
+  function availableDistance(row, col, dir) {
+    if (dir === 'up') return row;
+    if (dir === 'down') return N - 1 - row;
+    if (dir === 'left') return col;
+    if (dir === 'right') return N - 1 - col;
+  }
+
+  function applyDir(row, col, dir, dist) {
+    if (dir === 'up') return { row: row - dist, col };
+    if (dir === 'down') return { row: row + dist, col };
+    if (dir === 'left') return { row, col: col - dist };
+    return { row, col: col + dist };
+  }
+
+  function pickStep(row, col, excludeDirs) {
+    const candidates = ['up', 'down', 'left', 'right']
+      .filter(d => !excludeDirs.includes(d))
+      .sort(() => Math.random() - 0.5);
+    for (const dir of candidates) {
+      const avail = availableDistance(row, col, dir);
+      if (avail > 0) {
+        const dist = 1 + Math.floor(Math.random() * Math.min(avail, N - 1));
+        return { dir, dist, ...applyDir(row, col, dir, dist) };
+      }
+    }
+    return null;
+  }
+
+  function makeProblem(level) {
+    const edges = ['top', 'bottom', 'left', 'right'];
+    const edge = edges[Math.floor(Math.random() * edges.length)];
+    let row, col, firstDir;
+    if (edge === 'bottom') { row = N - 1; col = Math.floor(Math.random() * N); firstDir = 'up'; }
+    else if (edge === 'top') { row = 0; col = Math.floor(Math.random() * N); firstDir = 'down'; }
+    else if (edge === 'left') { col = 0; row = Math.floor(Math.random() * N); firstDir = 'right'; }
+    else { col = N - 1; row = Math.floor(Math.random() * N); firstDir = 'left'; }
+
+    const startRow = row, startCol = col;
+    const dist1 = 1 + Math.floor(Math.random() * (N - 1)); // 1〜4
+    let cur = applyDir(row, col, firstDir, dist1);
+    const steps = [{ dir: firstDir, dist: dist1 }];
+    let lastDir = firstDir;
+
+    for (let i = 1; i < level; i++) {
+      let step = pickStep(cur.row, cur.col, [lastDir, OPPOSITE[lastDir]]);
+      if (!step) step = pickStep(cur.row, cur.col, [lastDir]); // 選択肢が無ければ反対方向のみ許可
+      if (!step) break; // それでも無ければ手数を諦める（盤端の稀なケース）
+      steps.push({ dir: step.dir, dist: step.dist });
+      cur = { row: step.row, col: step.col };
+      lastDir = step.dir;
+    }
+
+    return { startRow, startCol, steps, targetRow: cur.row, targetCol: cur.col };
+  }
+
+  function currentProblem() { return history[histIndex]; }
+
+  // ---------- レイアウト（座標計算） ----------
+  function cellCenter(r, c) {
+    const t = tileAt(r, c);
+    return { x: t.offsetLeft + t.offsetWidth / 2, y: t.offsetTop + t.offsetHeight / 2 };
+  }
+
+  function layoutCoinSize() {
+    const t = tileAt(0, 0);
+    const size = Math.round(t.offsetWidth * 0.68);
+    coin.style.width = size + 'px';
+    coin.style.height = size + 'px';
+    const chestSize = Math.round(t.offsetWidth * 0.82);
+    chest.style.width = chestSize + 'px';
+    chest.style.height = chestSize + 'px';
+  }
+
+  function placeCoin(r, c, animate) {
+    const p = cellCenter(r, c);
+    coin.classList.toggle('snap-anim', !!animate);
+    coin.style.left = p.x + 'px';
+    coin.style.top = p.y + 'px';
+  }
+
+  function placeChest(r, c) {
+    const p = cellCenter(r, c);
+    chest.style.left = p.x + 'px';
+    chest.style.top = p.y + 'px';
+  }
+
+  function placeStartLabel(problem) {
+    const t = tileAt(problem.startRow, problem.startCol);
+    const wrapRect = boardWrap.getBoundingClientRect();
+    const tileRect = t.getBoundingClientRect();
+    const cx = tileRect.left + tileRect.width / 2 - wrapRect.left;
+    const cy = tileRect.top + tileRect.height / 2 - wrapRect.top;
+
+    startLabel.style.top = '';
+    startLabel.style.bottom = '';
+    startLabel.style.left = '';
+    startLabel.style.right = '';
+    startLabel.style.transform = '';
+
+    if (problem.startRow === N - 1) {
+      startLabel.style.top = (tileRect.bottom - wrapRect.top + 12) + 'px';
+      startLabel.style.left = cx + 'px';
+      startLabel.style.transform = 'translateX(-50%)';
+    } else if (problem.startRow === 0) {
+      startLabel.style.top = (tileRect.top - wrapRect.top - 34) + 'px';
+      startLabel.style.left = cx + 'px';
+      startLabel.style.transform = 'translateX(-50%)';
+    } else if (problem.startCol === 0) {
+      startLabel.style.left = (tileRect.left - wrapRect.left - 14) + 'px';
+      startLabel.style.top = cy + 'px';
+      startLabel.style.transform = 'translate(-100%, -50%)';
+    } else {
+      startLabel.style.left = (tileRect.right - wrapRect.left + 14) + 'px';
+      startLabel.style.top = cy + 'px';
+      startLabel.style.transform = 'translateY(-50%)';
+    }
+  }
+
+  function renderProblemText(problem) {
+    const lines = problem.steps.map((s, i) => {
+      const d = DIR_INFO[s.dir];
+      const prefix = i === 0 ? '' : 'つぎに ';
+      const suffix = i < problem.steps.length - 1 ? '、' : '';
+      return prefix + '<ruby>' + d.kanji + '<rt>' + d.kana + '</rt></ruby>に <span class="num">' + s.dist + '</span>つ' + suffix;
+    });
+    problemBox.innerHTML =
+      '<ruby>宝物<rt>たからもの</rt></ruby>は<br>' +
+      lines.join('<br>') + '<br>' +
+      'のところにある。';
+  }
+
+  function render() {
+    const p = currentProblem();
+    layoutCoinSize();
+    coin.classList.remove('correct-anim', 'wrong-anim');
+    coin.style.visibility = 'visible';
+    chest.classList.remove('show');
+    placeCoin(p.startRow, p.startCol, false);
+    placeStartLabel(p);
+    renderProblemText(p);
+    resultMsg.textContent = '';
+    resultMsg.className = '';
+    answerBtn.disabled = false;
+    curRow = p.startRow;
+    curCol = p.startCol;
+  }
+
+  function newProblem() {
+    history = history.slice(0, histIndex + 1);
+    history.push(makeProblem(currentLevel));
+    histIndex = history.length - 1;
+    render();
+  }
+
+  function goPrev() {
+    if (histIndex > 0) { histIndex--; render(); }
+  }
+  function goNext() {
+    if (histIndex < history.length - 1) { histIndex++; render(); }
+    else { newProblem(); }
+  }
+
+  document.getElementById('nav-prev').addEventListener('click', goPrev);
+  document.getElementById('nav-next').addEventListener('click', goNext);
+
+  // ---------- レベル選択 ----------
+  let currentLevel = parseInt(localStorage.getItem('ts_level') || '1', 10);
+  if (![1, 2, 3].includes(currentLevel)) currentLevel = 1;
+
+  const levelBtns = Array.from(document.querySelectorAll('.level-btn'));
+  function refreshLevelBtns() {
+    levelBtns.forEach(b => b.classList.toggle('active', Number(b.dataset.level) === currentLevel));
+  }
+  levelBtns.forEach(b => {
+    b.addEventListener('click', () => {
+      const lv = Number(b.dataset.level);
+      if (lv === currentLevel) return;
+      currentLevel = lv;
+      localStorage.setItem('ts_level', String(lv));
+      refreshLevelBtns();
+      history = [];
+      histIndex = -1;
+      newProblem();
+    });
+  });
+  refreshLevelBtns();
+
+  // ---------- ドラッグ処理 ----------
+  let curRow = 0, curCol = N - 1;
+  let dragging = false;
+  let dragOffsetX = 0, dragOffsetY = 0;
+  let hoverRow = 0, hoverCol = N - 1;
+
+  function nearestCell(cx, cy) {
+    let best = null, bestDist = Infinity;
+    for (let r = 0; r < N; r++) {
+      for (let c = 0; c < N; c++) {
+        const p = cellCenter(r, c);
+        const dd = (p.x - cx) ** 2 + (p.y - cy) ** 2;
+        if (dd < bestDist) { bestDist = dd; best = { r, c }; }
+      }
+    }
+    return best;
+  }
+
+  coin.addEventListener('pointerdown', (e) => {
+    ac();
+    dragging = true;
+    coin.classList.remove('snap-anim');
+    coin.setPointerCapture(e.pointerId);
+    coin.classList.add('dragging');
+    const rect = grid.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+    dragOffsetX = px - coin.offsetLeft;
+    dragOffsetY = py - coin.offsetTop;
+    hoverRow = curRow;
+    hoverCol = curCol;
+  });
+
+  coin.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const rect = grid.getBoundingClientRect();
+    let px = e.clientX - rect.left - dragOffsetX;
+    let py = e.clientY - rect.top - dragOffsetY;
+    px = Math.max(0, Math.min(rect.width, px));
+    py = Math.max(0, Math.min(rect.height, py));
+    coin.style.left = px + 'px';
+    coin.style.top = py + 'px';
+
+    const cell = nearestCell(px, py);
+    if (cell.r !== hoverRow || cell.c !== hoverCol) {
+      hoverRow = cell.r;
+      hoverCol = cell.c;
+      soundTick();
+    }
+  });
+
+  function endDrag(e) {
+    if (!dragging) return;
+    dragging = false;
+    coin.classList.remove('dragging');
+
+    const best = nearestCell(coin.offsetLeft, coin.offsetTop);
+    curRow = best.r;
+    curCol = best.c;
+    placeCoin(curRow, curCol, true);
+  }
+
+  coin.addEventListener('pointerup', endDrag);
+  coin.addEventListener('pointercancel', endDrag);
+
+  // ---------- 音 ----------
+  let audioCtx = null;
+  function ac() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+  function tone(freq, start, dur, type = 'sine', gain = 0.22) {
+    const ctx = ac();
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    g.gain.value = gain;
+    osc.connect(g).connect(ctx.destination);
+    const t0 = ctx.currentTime + start;
+    g.gain.setValueAtTime(gain, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.02);
+  }
+  function soundCorrect() {
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(f, i * 0.09, 0.28));
+  }
+  function soundTick() {
+    tone(520, 0, 0.07, 'square', 0.12);
+  }
+  function soundWrong() {
+    const ctx = ac();
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = 'sawtooth';
+    g.gain.value = 0.18;
+    osc.connect(g).connect(ctx.destination);
+    const t0 = ctx.currentTime;
+    osc.frequency.setValueAtTime(360, t0);
+    osc.frequency.exponentialRampToValueAtTime(140, t0 + 0.35);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.35);
+    osc.start(t0);
+    osc.stop(t0 + 0.37);
+  }
+
+  // ---------- 答え合わせ ----------
+  answerBtn.addEventListener('click', () => {
+    ac();
+    const p = currentProblem();
+    const ok = (curRow === p.targetRow && curCol === p.targetCol);
+    if (ok) {
+      soundCorrect();
+      resultMsg.textContent = 'せいかい！';
+      resultMsg.className = 'ok';
+      placeChest(p.targetRow, p.targetCol);
+      coin.classList.remove('correct-anim'); void coin.offsetWidth; coin.classList.add('correct-anim');
+      chest.classList.add('show');
+      const tt = tileAt(p.targetRow, p.targetCol);
+      tt.classList.remove('target-flash'); void tt.offsetWidth; tt.classList.add('target-flash');
+      flashEl.classList.remove('show'); void flashEl.offsetWidth; flashEl.classList.add('show');
+      answerBtn.disabled = true;
+      setTimeout(newProblem, 1800);
+    } else {
+      soundWrong();
+      resultMsg.textContent = 'ちがうよ、もういちど！';
+      resultMsg.className = 'ng';
+      coin.classList.remove('wrong-anim'); void coin.offsetWidth; coin.classList.add('wrong-anim');
+    }
+  });
+
+  // ---------- リサイズ対応 ----------
+  window.addEventListener('resize', () => {
+    layoutCoinSize();
+    placeCoin(curRow, curCol, false);
+    placeStartLabel(currentProblem());
+  });
+
+  // ---------- 初期化 ----------
+  newProblem();
+})();
+</script>
+</body>
+</html>
